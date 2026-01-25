@@ -109,12 +109,9 @@ npx prisma generate
 
 # Push database schema
 npx prisma db push
-
-# Create .env.local from example
-cp .env.example .env.local
 ```
 
-Edit `.env.local` with your values:
+Create `.env.local` in the project root and add:
 - `NEXT_PUBLIC_PRIVY_APP_ID` - Your Privy app ID
 - `NEXT_PUBLIC_ZETO_PROGRAM_ID` - The deployed program ID
 
