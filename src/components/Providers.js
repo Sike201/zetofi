@@ -9,12 +9,8 @@ const solanaConnectors = toSolanaWalletConnectors({
 });
 
 export default function Providers({ children }) {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-
-  if (!appId) {
-    console.warn('NEXT_PUBLIC_PRIVY_APP_ID is not set. Please add it to .env.local');
-    return <>{children}</>;
-  }
+  // Use placeholder during build when env is missing (e.g. Vercel); hooks require PrivyProvider
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || 'clplaceholder0000000000000000000';
 
   return (
     <PrivyProvider
