@@ -1,0 +1,233 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase credentials not found. Please check your .env.local file.');
+}
+
+// Create a single supabase client for interacting with your database
+export const supabase = createClient(
+  supabaseUrl || '',
+  supabaseAnonKey || '',
+  {
+    auth: {
+      persistSession: false, // We're using Privy for auth, not Supabase auth
+    },
+  }
+);
+
+// ============================================================================
+// Deals
+// ============================================================================
+
+/**
+ * Create a new deal
+ * @param {Object} deal - Deal data
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export async function createDeal(deal) {
+  const { data, error } = await supabase
+    .from('deals')
+    .insert([{
+      id: deal.id,
+      seller: deal.seller,
+      buyer: deal.buyer,
+      base_mint: deal.baseMint,
+      quote_mint: deal.quoteMint,
+      base_amount: deal.baseAmount,
+      quote_amount: deal.quoteAmount,
+      base_decimals: deal.baseDecimals ?? 9,
+      quote_decimals: deal.quoteDecimals ?? 9,
+      expiry_ts: deal.expiryTs,
+      fee_bps: deal.feeBps || 10,
+      network: deal.network || 'devnet',
+      status: deal.status || 'PENDING',
+      deal_pda: deal.dealPDA || null,
+      tx_signature: deal.txSignature || null,
+    }])
+    .select()
+    .single();
+
+  return { data: data ? mapDealFromDb(data) : null, error };
+}
+
+/**
+ * Get a deal by ID
+ * @param {string} id - Deal ID
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export async function getDeal(id) {
+  const { data, error } = await supabase
+    .from('deals')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  return { data: data ? mapDealFromDb(data) : null, error };
+}
+
+/**
+ * Get deals with optional filters
+ * @param {Object} filters - Optional filters (seller, buyer, status)
+ * @returns {Promise<{data: Array|null, error: Error|null}>}
+ */
+export async function getDeals(filters = {}) {
+  let query = supabase
+    .from('deals')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (filters.seller) {
+    query = query.eq('seller', filters.seller);
+  }
+  if (filters.buyer) {
+    query = query.eq('buyer', filters.buyer);
+  }
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data, error } = await query;
+
+  return { 
+    data: data ? data.map(mapDealFromDb) : null, 
+    error 
+  };
+}
+
+/**
+ * Update a deal
+ * @param {string} id - Deal ID
+ * @param {Object} updates - Fields to update
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export async function updateDeal(id, updates) {
+  const updateData = {};
+  if (updates.status !== undefined) updateData.status = updates.status;
+  if (updates.dealPDA !== undefined) updateData.deal_pda = updates.dealPDA;
+  if (updates.txSignature !== undefined) updateData.tx_signature = updates.txSignature;
+
+  const { data, error } = await supabase
+    .from('deals')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  return { data: data ? mapDealFromDb(data) : null, error };
+}
+
+/**
+ * Delete a deal (only if PENDING)
+ * @param {string} id - Deal ID
+ * @returns {Promise<{error: Error|null}>}
+ */
+export async function deleteDeal(id) {
+  const { error } = await supabase
+    .from('deals')
+    .delete()
+    .eq('id', id)
+    .eq('status', 'PENDING'); // Only delete pending deals
+
+  return { error };
+}
+
+// ============================================================================
+// Intents
+// ============================================================================
+
+/**
+ * Create a new intent
+ * @param {Object} intent - Intent data
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export async function createIntent(intent) {
+  const { data, error } = await supabase
+    .from('intents')
+    .insert([{
+      token_symbol: intent.tokenSymbol,
+      token_mint: intent.tokenMint,
+      side: intent.side,
+      size_bucket: intent.sizeBucket,
+      contact: intent.contact,
+      creator: intent.creator,
+    }])
+    .select()
+    .single();
+
+  return { data: data ? mapIntentFromDb(data) : null, error };
+}
+
+/**
+ * Get intents with optional filters
+ * @param {Object} filters - Optional filters (tokenMint, side, creator)
+ * @returns {Promise<{data: Array|null, error: Error|null}>}
+ */
+export async function getIntents(filters = {}) {
+  let query = supabase
+    .from('intents')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (filters.tokenMint) {
+    query = query.eq('token_mint', filters.tokenMint);
+  }
+  if (filters.side) {
+    query = query.eq('side', filters.side);
+  }
+  if (filters.creator) {
+    query = query.eq('creator', filters.creator);
+  }
+
+  const { data, error } = await query;
+
+  return { 
+    data: data ? data.map(mapIntentFromDb) : null, 
+    error 
+  };
+}
+
+// ============================================================================
+// Mappers (snake_case DB -> camelCase JS)
+// ============================================================================
+
+function mapDealFromDb(row) {
+  return {
+    id: row.id,
+    seller: row.seller,
+    buyer: row.buyer,
+    baseMint: row.base_mint,
+    quoteMint: row.quote_mint,
+    baseAmount: row.base_amount,
+    quoteAmount: row.quote_amount,
+    baseDecimals: row.base_decimals ?? 9,
+    quoteDecimals: row.quote_decimals ?? 9,
+    expiryTs: row.expiry_ts,
+    feeBps: row.fee_bps,
+    network: row.network,
+    status: row.status,
+    dealPDA: row.deal_pda,
+    txSignature: row.tx_signature,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapIntentFromDb(row) {
+  return {
+    id: row.id,
+    tokenSymbol: row.token_symbol,
+    tokenMint: row.token_mint,
+    side: row.side,
+    sizeBucket: row.size_bucket,
+    contact: row.contact,
+    creator: row.creator,
+    createdAt: row.created_at,
+  };
+}
+
+export default supabase;
