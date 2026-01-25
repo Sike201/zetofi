@@ -3,20 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+let supabase = null;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
+} else if (typeof window !== 'undefined') {
   console.warn('Supabase credentials not found. Please check your .env.local file.');
 }
 
-// Create a single supabase client for interacting with your database
-export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || '',
-  {
-    auth: {
-      persistSession: false, // We're using Privy for auth, not Supabase auth
-    },
-  }
-);
+export { supabase };
 
 // ============================================================================
 // Deals
@@ -28,6 +24,9 @@ export const supabase = createClient(
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export async function createDeal(deal) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   const { data, error } = await supabase
     .from('deals')
     .insert([{
@@ -59,6 +58,9 @@ export async function createDeal(deal) {
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export async function getDeal(id) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   const { data, error } = await supabase
     .from('deals')
     .select('*')
@@ -74,6 +76,9 @@ export async function getDeal(id) {
  * @returns {Promise<{data: Array|null, error: Error|null}>}
  */
 export async function getDeals(filters = {}) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   let query = supabase
     .from('deals')
     .select('*')
@@ -105,6 +110,9 @@ export async function getDeals(filters = {}) {
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export async function updateDeal(id, updates) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   const updateData = {};
   if (updates.status !== undefined) updateData.status = updates.status;
   if (updates.dealPDA !== undefined) updateData.deal_pda = updates.dealPDA;
@@ -126,6 +134,9 @@ export async function updateDeal(id, updates) {
  * @returns {Promise<{error: Error|null}>}
  */
 export async function deleteDeal(id) {
+  if (!supabase) {
+    return { error: { message: 'Supabase not configured' } };
+  }
   const { error } = await supabase
     .from('deals')
     .delete()
@@ -145,6 +156,9 @@ export async function deleteDeal(id) {
  * @returns {Promise<{data: Object|null, error: Error|null}>}
  */
 export async function createIntent(intent) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   const { data, error } = await supabase
     .from('intents')
     .insert([{
@@ -167,6 +181,9 @@ export async function createIntent(intent) {
  * @returns {Promise<{data: Array|null, error: Error|null}>}
  */
 export async function getIntents(filters = {}) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
   let query = supabase
     .from('intents')
     .select('*')
