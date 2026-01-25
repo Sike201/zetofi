@@ -25,8 +25,6 @@ export const metadata = {
   description: 'Non-custodial intent board and atomic settlement tool',
 };
 
-export const dynamic = 'force-dynamic';
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en">

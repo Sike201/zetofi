@@ -12,10 +12,15 @@ export default function Providers({ children }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
   if (!appId) {
-    if (typeof window !== 'undefined') {
-      console.warn('NEXT_PUBLIC_PRIVY_APP_ID is not set. Please add it to .env.local');
-    }
-    return <>{children}</>;
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-5 px-6 text-white">
+        <h1 className="text-xl font-semibold">Setup required</h1>
+        <p className="text-white/60 text-sm text-center max-w-md">
+          Add <code className="bg-white/10 px-1.5 py-0.5 rounded font-mono text-xs">NEXT_PUBLIC_PRIVY_APP_ID</code> to your Vercel project Environment Variables, then redeploy.
+        </p>
+        <p className="text-white/40 text-xs">Get your Privy App ID from <a href="https://dashboard.privy.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-white/60">dashboard.privy.io</a></p>
+      </div>
+    );
   }
 
   return (
