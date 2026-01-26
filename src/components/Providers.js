@@ -4,9 +4,23 @@ import { PrivyProvider } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 
 // Configure Solana wallet connectors - only show popular Solana wallets
-const solanaConnectors = toSolanaWalletConnectors({
+// Filter out MetaMask if it's detected as a Solana wallet
+const allSolanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
 });
+
+// Filter out MetaMask from the connectors to prevent it from showing
+// This allows detected_solana_wallets to show "More wallets" option instead
+const solanaConnectors = allSolanaConnectors.filter(
+  (connector) => {
+    const name = connector.name?.toLowerCase() || '';
+    const id = connector.id?.toLowerCase() || '';
+    return name !== 'metamask' && 
+           id !== 'metamask' &&
+           !name.includes('metamask') &&
+           !id.includes('metamask');
+  }
+);
 
 export default function Providers({ children }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
