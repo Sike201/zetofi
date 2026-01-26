@@ -37,6 +37,10 @@ export default function Providers({ children }) {
           solana: {
             connectors: solanaConnectors,
           },
+          // Explicitly disable Ethereum wallets to prevent MetaMask from showing
+          ethereum: {
+            connectors: [],
+          },
         },
         embeddedWallets: {
           createOnLogin: 'off', // Disable embedded wallets, only use external
