@@ -105,8 +105,22 @@ export default function TokenInput({
           onClick={handleDropdownClick}
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2a2a2a] text-sm font-medium text-white">
-              {tokenInfo.symbol?.slice(0, 2) || '??'}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2a2a2a] text-sm font-medium text-white overflow-hidden">
+              {tokenInfo.image ? (
+                <img 
+                  src={tokenInfo.image} 
+                  alt={tokenInfo.name || tokenInfo.symbol}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className={`h-full w-full items-center justify-center ${tokenInfo.image ? 'hidden' : 'flex'}`}>
+                {tokenInfo.symbol?.slice(0, 2) || '??'}
+              </div>
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
