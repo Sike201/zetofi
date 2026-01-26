@@ -29,7 +29,7 @@ export default function Providers({ children }) {
       config={{
         loginMethods: ['wallet'],
         appearance: {
-          theme: 'light',
+          theme: 'dark',
           accentColor: '#2563eb',
           walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'],
         },
