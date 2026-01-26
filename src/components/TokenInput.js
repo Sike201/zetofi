@@ -25,7 +25,41 @@ export default function TokenInput({
     }
     setIsLoading(true);
     try {
+      // Try Helius API first
       const response = await fetch(`/api/token/${mint}`);
+      if (response.ok) {
+        const { token } = await response.json();
+        // If Helius returns valid token info, use it
+        if (token && token.name !== 'Unknown Token' && token.symbol !== 'UNKNOWN') {
+          setTokenInfo(token);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Fallback to DexScreener if Helius fails or returns unknown
+      try {
+        const dexscreenerResponse = await fetch(`/api/dexscreener/token/${mint}`);
+        if (dexscreenerResponse.ok) {
+          const dexscreenerData = await dexscreenerResponse.json();
+          // If DexScreener has token info, use it
+          if (dexscreenerData && (dexscreenerData.name || dexscreenerData.symbol)) {
+            setTokenInfo({
+              mint,
+              name: dexscreenerData.name || 'Unknown Token',
+              symbol: dexscreenerData.symbol || 'UNKNOWN',
+              image: dexscreenerData.imageUrl || null,
+              decimals: 9, // Default decimals
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (dexscreenerErr) {
+        console.warn('DexScreener fallback failed:', dexscreenerErr);
+      }
+      
+      // If both fail, use Helius result (even if it's unknown) or set null
       if (response.ok) {
         const { token } = await response.json();
         setTokenInfo(token);

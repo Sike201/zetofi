@@ -208,6 +208,42 @@ export async function getIntents(filters = {}) {
   };
 }
 
+/**
+ * Delete an intent by ID
+ * @param {string} intentId - Intent ID
+ * @param {string} creator - Creator wallet address (for authorization)
+ * @returns {Promise<{data: Object|null, error: Error|null}>}
+ */
+export async function deleteIntent(intentId, creator) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase not configured' } };
+  }
+  
+  // First verify the intent belongs to the creator
+  const { data: intent, error: fetchError } = await supabase
+    .from('intents')
+    .select('creator')
+    .eq('id', intentId)
+    .single();
+
+  if (fetchError || !intent) {
+    return { data: null, error: { message: 'Intent not found' } };
+  }
+
+  if (intent.creator !== creator) {
+    return { data: null, error: { message: 'Unauthorized: You can only delete your own intents' } };
+  }
+
+  const { data, error } = await supabase
+    .from('intents')
+    .delete()
+    .eq('id', intentId)
+    .select()
+    .single();
+
+  return { data: data ? mapIntentFromDb(data) : null, error };
+}
+
 // ============================================================================
 // Mappers (snake_case DB -> camelCase JS)
 // ============================================================================

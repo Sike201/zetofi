@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import NumberFlow, { continuous } from '@number-flow/react';
+import { usePrivy } from '@privy-io/react-auth';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
 import TokenInput from '@/components/TokenInput';
 import ScrollReveal from '@/components/ScrollReveal';
-import { getIntents, saveIntent, deleteIntent } from '@/lib/storage';
 import { formatDate } from '@/lib/format';
 
 const SIZE_BUCKETS = [
@@ -47,18 +47,29 @@ function formatVolume(n) {
 }
 
 function formatContact(intent) {
+  // Handle new format where contact might be "twitter|telegram" for both
+  const contact = intent.contact || '';
+  if (contact.includes('|')) {
+    const [tw, tg] = contact.split('|');
+    const twitter = tw ? `@${tw.trim().replace(/^@/, '')}` : '';
+    const telegram = tg ? `t.me/${tg.trim().replace(/^@/, '').replace(/^t\.me\//, '')}` : '';
+    return [twitter, telegram].filter(Boolean).join(' · ') || '—';
+  }
+  
+  // Handle legacy format with contactType
   const t = intent.contactType || 'twitter';
-  if (t === 'twitter') return intent.contact ? `@${intent.contact.replace(/^@/, '')}` : '—';
-  if (t === 'telegram') return intent.contact ? `t.me/${intent.contact.replace(/^@/, '').replace(/^t\.me\//, '')}` : '—';
+  if (t === 'twitter') return contact ? `@${contact.replace(/^@/, '')}` : '—';
+  if (t === 'telegram') return contact ? `t.me/${contact.replace(/^@/, '').replace(/^t\.me\//, '')}` : '—';
   if (t === 'both') {
-    const tw = intent.contact ? `@${intent.contact.replace(/^@/, '')}` : '';
+    const tw = contact ? `@${contact.replace(/^@/, '')}` : '';
     const tg = intent.contactSecondary ? `t.me/${intent.contactSecondary.replace(/^@/, '').replace(/^t\.me\//, '')}` : '';
     return [tw, tg].filter(Boolean).join(' · ') || '—';
   }
-  return intent.contact || '—';
+  return contact || '—';
 }
 
 export default function IntentBoardPage() {
+  const { ready, authenticated, user, login } = usePrivy();
   const [intents, setIntents] = useState([]);
   const [filteredIntents, setFilteredIntents] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -71,6 +82,9 @@ export default function IntentBoardPage() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     tokenSymbol: '',
@@ -84,13 +98,46 @@ export default function IntentBoardPage() {
 
   const [errors, setErrors] = useState({});
 
+  // Get wallet address for authenticated user
+  const walletAddress = user?.wallet?.address;
+
   const onTokenInfo = useCallback((info) => {
     setFormData((prev) => ({ ...prev, tokenSymbol: info?.symbol ?? '' }));
   }, []);
 
+  // Load intents from API
+  const loadIntents = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/intents');
+      if (response.ok) {
+        const data = await response.json();
+        // Convert createdAt from ISO string to timestamp if needed
+        const intentsWithTimestamp = (data.intents || []).map(intent => ({
+          ...intent,
+          createdAt: intent.createdAt ? (typeof intent.createdAt === 'string' 
+            ? Math.floor(new Date(intent.createdAt).getTime() / 1000)
+            : intent.createdAt) : Date.now() / 1000
+        }));
+        setIntents(intentsWithTimestamp);
+      } else {
+        console.error('Failed to load intents');
+        setIntents([]);
+      }
+    } catch (error) {
+      console.error('Error loading intents:', error);
+      setIntents([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadIntents();
-  }, []);
+    // Poll for updates every 30 seconds
+    const interval = setInterval(loadIntents, 30000);
+    return () => clearInterval(interval);
+  }, [loadIntents]);
 
   // Fetch settled volume and poll for updates
   const fetchSettledVolume = useCallback(() => {
@@ -181,39 +228,108 @@ export default function IntentBoardPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const newIntent = {
-      tokenSymbol: formData.tokenSymbol.trim(),
-      tokenMint: formData.tokenMint.trim(),
-      side: formData.side,
-      sizeBucket: formData.sizeBucket,
-      contactType: formData.contactType,
-      contact: formData.contact.trim(),
-      contactSecondary: formData.contactType === 'both' ? formData.contactSecondary.trim() : undefined,
-      createdAt: Math.floor(Date.now() / 1000),
-    };
-    saveIntent(newIntent);
-    loadIntents();
-    setShowForm(false);
-    setFormData({
-      tokenSymbol: '',
-      tokenMint: '',
-      side: 'BUY',
-      sizeBucket: 'M',
-      contactType: 'twitter',
-      contact: '',
-      contactSecondary: '',
-    });
-    setErrors({});
+    // Check authentication
+    if (!authenticated || !walletAddress) {
+      setSubmitError('Please sign in to create an intent');
+      login();
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      // Format contact based on contactType
+      let contactValue = formData.contact.trim();
+      if (formData.contactType === 'both') {
+        contactValue = `${formData.contact.trim()}|${formData.contactSecondary.trim()}`;
+      }
+
+      const response = await fetch('/api/intents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tokenSymbol: formData.tokenSymbol.trim(),
+          tokenMint: formData.tokenMint.trim(),
+          side: formData.side,
+          sizeBucket: formData.sizeBucket,
+          contact: contactValue,
+          creator: walletAddress,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setSubmitError('Please sign in to create an intent');
+          login();
+        } else if (response.status === 403) {
+          setSubmitError(data.error || 'Maximum limit reached. You can have up to 7 active intents.');
+        } else {
+          setSubmitError(data.error || 'Failed to create intent. Please try again.');
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Success - reload intents and reset form
+      await loadIntents();
+      setShowForm(false);
+      setFormData({
+        tokenSymbol: '',
+        tokenMint: '',
+        side: 'BUY',
+        sizeBucket: 'M',
+        contactType: 'twitter',
+        contact: '',
+        contactSecondary: '',
+      });
+      setErrors({});
+      setSubmitError('');
+    } catch (error) {
+      console.error('Error creating intent:', error);
+      setSubmitError('Failed to create intent. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleDelete(id) {
+  async function handleDelete(id) {
     if (!id) return;
-    deleteIntent(id);
-    loadIntents();
+    
+    // Check authentication
+    if (!authenticated || !walletAddress) {
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this intent?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/intents?id=${id}&creator=${walletAddress}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete intent');
+        return;
+      }
+
+      // Reload intents after deletion
+      await loadIntents();
+    } catch (error) {
+      console.error('Error deleting intent:', error);
+      alert('Failed to delete intent. Please try again.');
+    }
   }
 
   const sorted = [...filteredIntents].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -308,7 +424,14 @@ export default function IntentBoardPage() {
             />
             <button
               type="button"
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => {
+                if (!authenticated) {
+                  login();
+                  return;
+                }
+                setShowForm(!showForm);
+                setSubmitError('');
+              }}
               className="rounded-lg bg-[#2a2a2a] px-3 py-2 text-xs font-medium text-white hover:bg-[#333] transition-colors focus:outline-none whitespace-nowrap"
             >
               {showForm ? 'Cancel' : '+ New Intent'}
@@ -320,6 +443,16 @@ export default function IntentBoardPage() {
       {showForm && (
         <div className="mt-6 rounded-xl bg-[#0d0d0d] p-6">
           <h2 className="mb-4 text-xl font-semibold text-white">Create New Intent</h2>
+          {!authenticated && (
+            <div className="mb-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-sm text-yellow-400">
+              Please sign in to create an intent. You can have up to 7 active intents.
+            </div>
+          )}
+          {submitError && (
+            <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
+              {submitError}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <TokenInput
@@ -413,6 +546,7 @@ export default function IntentBoardPage() {
                 onClick={() => {
                   setShowForm(false);
                   setErrors({});
+                  setSubmitError('');
                 }}
                 className="rounded-lg bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white/90 hover:bg-[#333] focus:outline-none"
               >
@@ -420,9 +554,10 @@ export default function IntentBoardPage() {
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white hover:bg-[#333] focus:outline-none"
+                disabled={!authenticated || isSubmitting}
+                className="rounded-lg bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white hover:bg-[#333] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Post Intent
+                {isSubmitting ? 'Creating...' : 'Create Intent'}
               </button>
             </div>
           </form>
@@ -507,14 +642,16 @@ export default function IntentBoardPage() {
                             {intent.createdAt ? formatDate(intent.createdAt) : '—'}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(intent.id)}
-                              className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none"
-                              aria-label="Delete intent"
-                            >
-                              Delete
-                            </button>
+                            {authenticated && walletAddress && intent.creator === walletAddress && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(intent.id)}
+                                className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none"
+                                aria-label="Delete intent"
+                              >
+                                Delete
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

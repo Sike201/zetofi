@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+// Configure runtime for Vercel
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // Cache token metadata to avoid repeated API calls
 const tokenCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
