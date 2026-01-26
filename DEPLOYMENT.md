@@ -156,11 +156,11 @@ spl-token mint <TOKEN_ADDRESS> 1000
    - Ensure you have quote tokens (USDC devnet)
    - Click "Accept & Settle"
 
-### Devnet USDC
+### Devnet Quote Token
 
-The default quote mint is devnet USDC: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
+The default quote mint on devnet is: `Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr`
 
-To get devnet USDC, use a faucet or create your own test token.
+To get devnet tokens, use a faucet or create your own test token.
 
 ## Common Issues
 

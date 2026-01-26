@@ -7,6 +7,10 @@ skip-lint = false
 [programs.devnet]
 zeto_escrow = "BY1HuoCGtM71JTNhpwP7vSfRoiZPfcosgMsaDbFRqJTo"
 
+# Mainnet program ID will be set after deployment
+# [programs.mainnet]
+# zeto_escrow = "MAINNET_PROGRAM_ID_HERE"
+
 [registry]
 url = "https://api.apr.dev"
 

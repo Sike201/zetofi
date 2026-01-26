@@ -32,14 +32,14 @@ export default function SettlePage() {
     },
   });
   const [role, setRole] = useState('');
-  const [network, setNetwork] = useState('mainnet');
+  const [network, setNetwork] = useState('devnet');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const [formData, setFormData] = useState({
     baseMint: '',
     baseAmount: '',
-    quoteMint: getUsdcMint('mainnet'), // Lock to USDC
+    quoteMint: getUsdcMint('devnet'), // Lock to USDC
     quoteAmount: '',
     counterparty: '',
     expiryHours: '24',
