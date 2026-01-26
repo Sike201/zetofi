@@ -210,10 +210,6 @@ export default function IntentBoardPage() {
     });
   }, [sortedMints, tokenMeta]);
 
-  function loadIntents() {
-    setIntents(getIntents());
-  }
-
   function validateForm() {
     const newErrors = {};
     if (!formData.tokenSymbol?.trim()) newErrors.tokenSymbol = 'Token symbol is required';
