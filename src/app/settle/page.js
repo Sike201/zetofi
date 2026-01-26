@@ -32,7 +32,7 @@ export default function SettlePage() {
     },
   });
   const [role, setRole] = useState('');
-  const [network, setNetwork] = useState('devnet');
+  const [network] = useState('devnet'); // Locked to devnet only
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -135,11 +135,11 @@ export default function SettlePage() {
     return () => clearTimeout(timer);
   }, [formData.baseMint, fetchTokenInfo]);
 
-  // Update quote mint when network changes (always USDC)
+  // Lock quote mint to devnet USDC
   useEffect(() => {
-    const usdcMint = getUsdcMint(network);
+    const usdcMint = getUsdcMint('devnet');
     setFormData((prev) => ({ ...prev, quoteMint: usdcMint }));
-  }, [network]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -243,8 +243,8 @@ export default function SettlePage() {
 
       // Fetch actual decimals from the token mints
       const [baseDecimals, quoteDecimals] = await Promise.all([
-        getTokenDecimals(formData.baseMint.trim(), network),
-        getTokenDecimals(formData.quoteMint.trim(), network),
+        getTokenDecimals(formData.baseMint.trim(), 'devnet'),
+        getTokenDecimals(formData.quoteMint.trim(), 'devnet'),
       ]);
       
       console.log(`Token decimals - Base: ${baseDecimals}, Quote: ${quoteDecimals}`);
@@ -266,7 +266,7 @@ export default function SettlePage() {
         quoteDecimals,
         expiryTs,
         feeBps: FEE_BPS,
-        network,
+        network: 'devnet',
       };
 
       const createResponse = await fetch('/api/deals', {
@@ -292,7 +292,7 @@ export default function SettlePage() {
           baseAmount: baseAmountRaw,
           quoteAmount: quoteAmountRaw,
           expiryTs,
-          network,
+          network: 'devnet',
         });
 
         // Update deal with on-chain data
@@ -390,16 +390,14 @@ export default function SettlePage() {
                 required
                 disabled={!authenticated}
               />
-              <Select
-                label="Network"
-                value={network}
-                onChange={(e) => setNetwork(e.target.value)}
-                options={[
-                  { value: 'devnet', label: 'Devnet' },
-                  { value: 'mainnet', label: 'Mainnet' },
-                ]}
-                disabled={!authenticated}
-              />
+              <div className="rounded-lg bg-[#1a1a1a] p-3">
+                <label className="mb-1 block text-sm font-medium text-white/70">
+                  Network
+                </label>
+                <div className="text-sm text-white/50">
+                  Devnet (locked)
+                </div>
+              </div>
             </div>
 
             {role === 'buyer' && (
@@ -454,7 +452,7 @@ export default function SettlePage() {
                     value={formData.quoteMint}
                     onChange={(e) => {
                       // Lock to USDC - prevent changes
-                      const usdcMint = getUsdcMint(network);
+                      const usdcMint = getUsdcMint('devnet');
                       setFormData({ ...formData, quoteMint: usdcMint });
                     }}
                     placeholder="USDC (locked)"

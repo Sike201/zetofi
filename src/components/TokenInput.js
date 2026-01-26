@@ -27,11 +27,13 @@ export default function TokenInput({
     try {
       // Try Helius API first
       const response = await fetch(`/api/token/${mint}`);
+      let heliusToken = null;
       if (response.ok) {
-        const { token } = await response.json();
+        const data = await response.json();
+        heliusToken = data.token;
         // If Helius returns valid token info, use it
-        if (token && token.name !== 'Unknown Token' && token.symbol !== 'UNKNOWN') {
-          setTokenInfo(token);
+        if (heliusToken && heliusToken.name !== 'Unknown Token' && heliusToken.symbol !== 'UNKNOWN') {
+          setTokenInfo(heliusToken);
           setIsLoading(false);
           return;
         }
@@ -60,9 +62,8 @@ export default function TokenInput({
       }
       
       // If both fail, use Helius result (even if it's unknown) or set null
-      if (response.ok) {
-        const { token } = await response.json();
-        setTokenInfo(token);
+      if (heliusToken) {
+        setTokenInfo(heliusToken);
       } else {
         setTokenInfo(null);
       }

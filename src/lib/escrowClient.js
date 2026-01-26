@@ -46,6 +46,11 @@ async function signTransactionWithMethod(transaction, signingMethod, network = '
     // Expects: { transaction: Uint8Array, wallet: ConnectedStandardSolanaWallet, chain?: SolanaChain }
     // Returns: { signedTransaction: Uint8Array }
     
+    // Get fresh blockhash right before signing to avoid stale blockhash issues
+    const connection = getConnection(network);
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
+    transaction.recentBlockhash = blockhash;
+    
     // Serialize the full transaction to Uint8Array
     // Note: serialize({ requireAllSignatures: false }) allows serialization without signatures
     const serializedTx = transaction.serialize({ 
@@ -56,15 +61,24 @@ async function signTransactionWithMethod(transaction, signingMethod, network = '
     // Determine the Solana chain for Privy
     const chain = network === 'mainnet' ? 'solana:mainnet' : 'solana:devnet';
     
-    const result = await signingMethod.signTransaction({
-      transaction: serializedTx,
-      wallet: signingMethod.wallet,
-      chain,
-    });
-    
-    // Deserialize the signed transaction back to a Transaction object
-    const signedTransaction = Transaction.from(result.signedTransaction);
-    return signedTransaction;
+    try {
+      const result = await signingMethod.signTransaction({
+        transaction: serializedTx,
+        wallet: signingMethod.wallet,
+        chain,
+      });
+      
+      // Deserialize the signed transaction back to a Transaction object
+      const signedTransaction = Transaction.from(result.signedTransaction);
+      
+      // Ensure the blockhash is still valid after signing
+      signedTransaction.recentBlockhash = blockhash;
+      
+      return signedTransaction;
+    } catch (error) {
+      console.error('Privy signTransaction error:', error);
+      throw new Error(`Failed to sign transaction: ${error.message || error}`);
+    }
   } else {
     throw new Error('No valid signing method available. Ensure you have a connected Solana wallet.');
   }
@@ -189,7 +203,8 @@ export async function createAndDepositEscrow({
   });
   
   // Build transaction
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  // Get fresh blockhash right before building transaction to avoid stale blockhash
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
   const transaction = new Transaction({
     recentBlockhash: blockhash,
     feePayer: sellerPubkey,
@@ -198,7 +213,7 @@ export async function createAndDepositEscrow({
   transaction.add(initIx);
   transaction.add(depositIx);
   
-  // Sign with the provided signing method
+  // Sign with the provided signing method (will refresh blockhash if needed)
   const signedTx = await signTransactionWithMethod(transaction, signingMethod, network);
   
   // Send transaction
