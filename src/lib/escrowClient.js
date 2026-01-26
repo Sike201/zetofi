@@ -99,6 +99,24 @@ export async function createAndDepositEscrow({
 }) {
   const connection = getConnection(network);
   
+  // Verify program exists on this network
+  try {
+    const programInfo = await connection.getAccountInfo(PROGRAM_ID);
+    if (!programInfo) {
+      throw new Error(
+        `Escrow program not found on ${network}. ` +
+        `Program ID: ${PROGRAM_ID.toString()}. ` +
+        `Please deploy the program to ${network} or set NEXT_PUBLIC_ZETO_PROGRAM_ID to the correct program ID for ${network}.`
+      );
+    }
+  } catch (error) {
+    if (error.message?.includes('Escrow program not found')) {
+      throw error;
+    }
+    // If getAccountInfo fails for other reasons, continue (might be network issue)
+    console.warn('Could not verify program existence:', error.message);
+  }
+  
   // Convert strings to PublicKeys
   const sellerPubkey = new PublicKey(seller);
   const buyerPubkey = new PublicKey(buyer);
@@ -184,10 +202,23 @@ export async function createAndDepositEscrow({
   const signedTx = await signTransactionWithMethod(transaction, signingMethod, network);
   
   // Send transaction
-  const signature = await connection.sendRawTransaction(signedTx.serialize(), {
-    skipPreflight: false,
-    preflightCommitment: 'confirmed',
-  });
+  let signature;
+  try {
+    signature = await connection.sendRawTransaction(signedTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+  } catch (error) {
+    // Check for program not found error
+    if (error.message?.includes('does not exist') || error.message?.includes('program') || error.logs?.some(log => log.includes('does not exist'))) {
+      throw new Error(
+        `Escrow program not deployed on ${network}. ` +
+        `Program ID: ${PROGRAM_ID.toString()}. ` +
+        `Please deploy the program to ${network} first, or set NEXT_PUBLIC_ZETO_PROGRAM_ID in Vercel to the correct ${network} program ID.`
+      );
+    }
+    throw error;
+  }
   
   // Confirm transaction
   await connection.confirmTransaction({
