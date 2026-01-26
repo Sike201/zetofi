@@ -46,12 +46,7 @@ async function signTransactionWithMethod(transaction, signingMethod, network = '
     // Expects: { transaction: Uint8Array, wallet: ConnectedStandardSolanaWallet, chain?: SolanaChain }
     // Returns: { signedTransaction: Uint8Array }
     
-    // Get fresh blockhash right before signing to avoid stale blockhash issues
-    const connection = getConnection(network);
-    const { blockhash } = await connection.getLatestBlockhash('finalized');
-    transaction.recentBlockhash = blockhash;
-    
-    // Serialize the full transaction to Uint8Array
+    // Serialize the transaction as-is (blockhash should already be set)
     // Note: serialize({ requireAllSignatures: false }) allows serialization without signatures
     const serializedTx = transaction.serialize({ 
       requireAllSignatures: false,
@@ -69,10 +64,8 @@ async function signTransactionWithMethod(transaction, signingMethod, network = '
       });
       
       // Deserialize the signed transaction back to a Transaction object
+      // DO NOT modify the transaction after Privy signs it - it's already properly formatted
       const signedTransaction = Transaction.from(result.signedTransaction);
-      
-      // Ensure the blockhash is still valid after signing
-      signedTransaction.recentBlockhash = blockhash;
       
       return signedTransaction;
     } catch (error) {
@@ -202,6 +195,14 @@ export async function createAndDepositEscrow({
     data: depositData,
   });
   
+  // Verify program ID is set (not the default System Program ID)
+  if (PROGRAM_ID.equals(SystemProgram.programId)) {
+    throw new Error(
+      `Escrow program ID not configured. Please set NEXT_PUBLIC_ZETO_PROGRAM_ID in Vercel environment variables to your deployed program ID. ` +
+      `Current value: ${PROGRAM_ID.toString()}`
+    );
+  }
+  
   // Build transaction
   // Get fresh blockhash right before building transaction to avoid stale blockhash
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
@@ -213,7 +214,8 @@ export async function createAndDepositEscrow({
   transaction.add(initIx);
   transaction.add(depositIx);
   
-  // Sign with the provided signing method (will refresh blockhash if needed)
+  // Sign with the provided signing method
+  // Note: Do NOT refresh blockhash in signTransactionWithMethod - it will corrupt the transaction
   const signedTx = await signTransactionWithMethod(transaction, signingMethod, network);
   
   // Send transaction
