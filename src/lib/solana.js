@@ -17,12 +17,25 @@ export const NETWORKS = {
 };
 
 // Default network
-export const DEFAULT_NETWORK = 'devnet';
+export const DEFAULT_NETWORK = 'mainnet';
 
-// Default quote mint (USDC on devnet)
-// Devnet USDC: 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
-// Mainnet USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
-export const DEFAULT_QUOTE_MINT = process.env.NEXT_PUBLIC_DEFAULT_QUOTE_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+// USDC mint addresses
+export const USDC_MINTS = {
+  devnet: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+  mainnet: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+};
+
+// Default quote mint (USDC on mainnet)
+export const DEFAULT_QUOTE_MINT = process.env.NEXT_PUBLIC_DEFAULT_QUOTE_MINT || USDC_MINTS.mainnet;
+
+/**
+ * Get USDC mint address for a network
+ * @param {string} network - 'devnet' or 'mainnet'
+ * @returns {string} - USDC mint address
+ */
+export function getUsdcMint(network = DEFAULT_NETWORK) {
+  return USDC_MINTS[network] || USDC_MINTS.mainnet;
+}
 
 // Connection cache to avoid creating multiple connections
 const connectionCache = {};

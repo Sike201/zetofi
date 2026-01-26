@@ -9,7 +9,7 @@ import Input from '@/components/Input';
 import Select from '@/components/Select';
 import TokenInput from '@/components/TokenInput';
 import ScrollReveal from '@/components/ScrollReveal';
-import { isValidPubkey, formatPubkey } from '@/lib/solana';
+import { isValidPubkey, formatPubkey, getUsdcMint } from '@/lib/solana';
 import { formatNumber } from '@/lib/format';
 import { createAndDepositEscrow, getTokenDecimals } from '@/lib/escrowClient';
 import { FEE_BPS } from '@/lib/escrow';
@@ -32,14 +32,14 @@ export default function SettlePage() {
     },
   });
   const [role, setRole] = useState('');
-  const [network, setNetwork] = useState('devnet');
+  const [network, setNetwork] = useState('mainnet');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
   const [formData, setFormData] = useState({
     baseMint: '',
     baseAmount: '',
-    quoteMint: '',
+    quoteMint: getUsdcMint('mainnet'), // Lock to USDC
     quoteAmount: '',
     counterparty: '',
     expiryHours: '24',
@@ -135,6 +135,12 @@ export default function SettlePage() {
     return () => clearTimeout(timer);
   }, [formData.baseMint, fetchTokenInfo]);
 
+  // Update quote mint when network changes (always USDC)
+  useEffect(() => {
+    const usdcMint = getUsdcMint(network);
+    setFormData((prev) => ({ ...prev, quoteMint: usdcMint }));
+  }, [network]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchTokenInfo(formData.quoteMint, setQuoteTokenInfo);
@@ -157,10 +163,9 @@ export default function SettlePage() {
       newErrors.baseAmount = 'Must be a positive number';
     }
 
-    if (!formData.quoteMint.trim()) {
-      newErrors.quoteMint = 'Quote token mint is required';
-    } else if (!isValidPubkey(formData.quoteMint)) {
-      newErrors.quoteMint = 'Invalid public key';
+    // Quote mint is locked to USDC, so just validate it exists
+    if (!formData.quoteMint.trim() || !isValidPubkey(formData.quoteMint)) {
+      newErrors.quoteMint = 'USDC mint address is required';
     }
 
     if (!formData.quoteAmount.trim()) {
@@ -391,9 +396,9 @@ export default function SettlePage() {
                 onChange={(e) => setNetwork(e.target.value)}
                 options={[
                   { value: 'devnet', label: 'Devnet' },
-                  { value: 'mainnet', label: 'Mainnet (coming soon)' },
+                  { value: 'mainnet', label: 'Mainnet' },
                 ]}
-                disabled
+                disabled={!authenticated}
               />
             </div>
 
@@ -445,15 +450,17 @@ export default function SettlePage() {
                     disabled={!authenticated}
                   />
                   <TokenInput
-                    label="Quote Token Mint (buyer pays)"
+                    label="Quote Token (buyer pays) - USDC only"
                     value={formData.quoteMint}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quoteMint: e.target.value })
-                    }
-                    placeholder="Usually USDC"
+                    onChange={(e) => {
+                      // Lock to USDC - prevent changes
+                      const usdcMint = getUsdcMint(network);
+                      setFormData({ ...formData, quoteMint: usdcMint });
+                    }}
+                    placeholder="USDC (locked)"
                     error={errors.quoteMint}
                     required
-                    disabled={!authenticated}
+                    disabled={true}
                   />
                   <Input
                     label="Quote Amount"
