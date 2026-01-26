@@ -33,7 +33,7 @@ export default function Providers({ children }) {
           accentColor: '#2563eb',
           // Explicitly list Solana wallets, then show detected_solana_wallets for "More wallets"
           // This will show other Solana wallets (excluding the ones already listed)
-          walletList: ['phantom', 'solflare', 'backpack', 'detected_solana_wallets'],
+          walletList: ['phantom', 'solflare', 'backpack', 'jupiter'],
         },
         externalWallets: {
           solana: {
