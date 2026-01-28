@@ -21,8 +21,11 @@ const playfairDisplay = Playfair_Display({
 });
 
 export const metadata = {
-  title: 'Zeto - Intent Board & Atomic Settlement',
-  description: 'Non-custodial intent board and atomic settlement tool',
+  title: 'Zeto – Markets & Settlement',
+  description: 'Zeto is a non-custodial intent board and settlement tool for Solana.',
+  icons: {
+    icon: '/zetologo.png',
+  },
 };
 
 export default function RootLayout({ children }) {
