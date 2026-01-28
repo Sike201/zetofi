@@ -1,13 +1,8 @@
-# Zeto Escrow - Deployment Guide
+# Zeto – Deployment
 
-## Prerequisites
+You need Rust, Solana CLI, Anchor, and Node 18+ (see [rustup](https://rustup.rs), [Solana CLI](https://docs.solana.com/cli/install-solana-cli-tools), [Anchor](https://www.anchor-lang.com/), [Node](https://nodejs.org)).
 
-1. **Rust & Cargo** - Install from https://rustup.rs
-2. **Solana CLI** - Install from https://docs.solana.com/cli/install-solana-cli-tools
-3. **Anchor CLI** - Install with `cargo install --git https://github.com/coral-xyz/anchor avm --locked --force`
-4. **Node.js 18+** - Install from https://nodejs.org
-
-## Step 1: Set Up Solana CLI
+## Solana CLI
 
 ```bash
 # Configure for devnet
@@ -24,7 +19,7 @@ solana airdrop 2
 solana airdrop 2  # Run multiple times if needed
 ```
 
-## Step 2: Build the Anchor Program
+## Build Anchor
 
 ```bash
 cd anchor
@@ -36,9 +31,9 @@ anchor build
 solana address -k target/deploy/zeto_escrow-keypair.json
 ```
 
-## Step 3: Update Program ID
+## Set program ID
 
-After building, you'll get a program ID. Update it in:
+After build, get the program ID and set it in:
 
 1. `anchor/programs/zeto_escrow/src/lib.rs`:
    ```rust
@@ -61,7 +56,7 @@ Then rebuild:
 anchor build
 ```
 
-## Step 4: Deploy to Devnet
+## Deploy to devnet
 
 ```bash
 cd anchor
@@ -73,7 +68,7 @@ If you get "insufficient funds", airdrop more SOL:
 solana airdrop 2
 ```
 
-### Upgrading the program (e.g. 0.2% buyer-only fees)
+### Upgrading (e.g. 0.2% buyer-only fee)
 
 If you **already have** the program deployed at `BY1HuoCGtM71JTNhpwP7vSfRoiZPfcosgMsaDbFRqJTo` and only changed code (e.g. fee logic):
 
@@ -95,29 +90,18 @@ If you **already have** the program deployed at `BY1HuoCGtM71JTNhpwP7vSfRoiZPfco
 
 If upgrade fails (e.g. wrong upgrade authority), you’d need to deploy a **new** program (new keypair), update the program ID in `lib.rs`, `Anchor.toml`, and `.env.local`, then redeploy.
 
-## Step 5: Set Up Frontend
+## Frontend
+
+From project root:
 
 ```bash
-# Back to project root
 cd ..
-
-# Install dependencies
 npm install
-
-# Generate Prisma client
-npx prisma generate
-
-# Push database schema
-npx prisma db push
 ```
 
-Create `.env.local` in the project root and add:
-- `NEXT_PUBLIC_PRIVY_APP_ID` - Your Privy app ID
-- `NEXT_PUBLIC_ZETO_PROGRAM_ID` - The deployed program ID
+Create `.env.local` with at least `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_ZETO_PROGRAM_ID`. Fee recipient is fixed in code: `8zatMKSZT1xm7p2h7671pUmZQCv6seCd82tU1QmWmxeC`.
 
-Fees are always sent to `8zatMKSZT1xm7p2h7671pUmZQCv6seCd82tU1QmWmxeC` (hardcoded).
-
-## Step 6: Run the App
+## Run
 
 ```bash
 npm run dev
@@ -180,21 +164,18 @@ To get devnet tokens, use a faucet or create your own test token.
 - Verify mint addresses are correct
 - Ensure expiry is in the future
 
-## Environment Variables
+## Env vars
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEXT_PUBLIC_PRIVY_APP_ID` | Privy application ID | Yes |
-| `NEXT_PUBLIC_ZETO_PROGRAM_ID` | Deployed program ID | Yes |
-| `DATABASE_URL` | SQLite database path | Yes |
-| `NEXT_PUBLIC_SOLANA_RPC_DEVNET` | Custom devnet RPC | No |
-| `NEXT_PUBLIC_SOLANA_RPC_MAINNET` | Custom mainnet RPC | No |
+| Variable | Required |
+|----------|----------|
+| `NEXT_PUBLIC_PRIVY_APP_ID` | Yes |
+| `NEXT_PUBLIC_ZETO_PROGRAM_ID` | Yes |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes (for intents/deals) |
+| `NEXT_PUBLIC_SOLANA_RPC_DEVNET` / `_MAINNET` | No (defaults to public RPC) |
 
-Fee recipient is fixed to `8zatMKSZT1xm7p2h7671pUmZQCv6seCd82tU1QmWmxeC` in code.
+## Mainnet
 
-## Mainnet Deployment
-
-1. Switch Solana CLI to mainnet:
+1. Solana CLI to mainnet:
    ```bash
    solana config set --url mainnet-beta
    ```
@@ -213,10 +194,6 @@ Fee recipient is fixed to `8zatMKSZT1xm7p2h7671pUmZQCv6seCd82tU1QmWmxeC` in code
    EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
    ```
 
-## Security Considerations
+## Security
 
-- The program is non-custodial - only participants can move funds
-- Fees are only taken on successful settlement
-- Seller can cancel anytime before buyer accepts
-- Expired deals can be reclaimed by anyone (funds go to seller)
-- Always verify mint addresses before creating deals
+Non-custodial: only seller/buyer move funds. Fees only on settlement. Seller can cancel before accept. Expired deals revert to seller. Verify mints before creating deals.

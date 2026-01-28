@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
 
-// Configure runtime for Vercel
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Cache token metadata to avoid repeated API calls
 const tokenCache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// GET /api/token/[mint] - Get token metadata from Helius
+const CACHE_TTL = 5 * 60 * 1000;
 export async function GET(request, { params }) {
   try {
     const { mint } = await params;
@@ -20,19 +16,16 @@ export async function GET(request, { params }) {
       );
     }
 
-    // Check cache first
     const cached = tokenCache.get(mint);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return NextResponse.json({ token: cached.data });
     }
 
-    // Get Helius API key from RPC URL
     const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_DEVNET || '';
     const apiKeyMatch = rpcUrl.match(/api-key=([^&]+)/);
     const apiKey = apiKeyMatch ? apiKeyMatch[1] : null;
 
     if (!apiKey) {
-      // Fallback: try to get basic info from Solana
       return NextResponse.json({
         token: {
           mint,
@@ -44,7 +37,6 @@ export async function GET(request, { params }) {
       });
     }
 
-    // Use Helius DAS API to get token metadata
     const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -1,6 +1,5 @@
 import { PublicKey, Connection } from '@solana/web3.js';
 
-// Network configuration - Using Helius for faster RPC
 export const NETWORKS = {
   devnet: {
     name: 'Devnet',
@@ -16,16 +15,13 @@ export const NETWORKS = {
   },
 };
 
-// Default network
 export const DEFAULT_NETWORK = 'devnet';
 
-// USDC mint addresses
 export const USDC_MINTS = {
   devnet: 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr',
   mainnet: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
 };
 
-// Default quote mint (USDC on devnet)
 export const DEFAULT_QUOTE_MINT = process.env.NEXT_PUBLIC_DEFAULT_QUOTE_MINT || USDC_MINTS.devnet;
 
 /**

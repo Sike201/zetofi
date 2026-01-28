@@ -9,20 +9,12 @@ if (supabaseUrl && supabaseAnonKey) {
     auth: { persistSession: false },
   });
 } else if (typeof window !== 'undefined') {
-  console.warn('Supabase credentials not found. Please check your .env.local file.');
+  console.warn('Supabase credentials not found. Check .env.local');
 }
 
 export { supabase };
 
-// ============================================================================
-// Deals
-// ============================================================================
-
-/**
- * Create a new deal
- * @param {Object} deal - Deal data
- * @returns {Promise<{data: Object|null, error: Error|null}>}
- */
+/** @param {Object} deal @returns {Promise<{data: Object|null, error: Error|null}>} */
 export async function createDeal(deal) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -52,11 +44,7 @@ export async function createDeal(deal) {
   return { data: data ? mapDealFromDb(data) : null, error };
 }
 
-/**
- * Get a deal by ID
- * @param {string} id - Deal ID
- * @returns {Promise<{data: Object|null, error: Error|null}>}
- */
+/** @param {string} id @returns {Promise<{data: Object|null, error: Error|null}>} */
 export async function getDeal(id) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -70,11 +58,7 @@ export async function getDeal(id) {
   return { data: data ? mapDealFromDb(data) : null, error };
 }
 
-/**
- * Get deals with optional filters
- * @param {Object} filters - Optional filters (seller, buyer, status)
- * @returns {Promise<{data: Array|null, error: Error|null}>}
- */
+/** @param {Object} filters - optional seller, buyer, status @returns {Promise<{data: Array|null, error: Error|null}>} */
 export async function getDeals(filters = {}) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -103,12 +87,7 @@ export async function getDeals(filters = {}) {
   };
 }
 
-/**
- * Update a deal
- * @param {string} id - Deal ID
- * @param {Object} updates - Fields to update
- * @returns {Promise<{data: Object|null, error: Error|null}>}
- */
+/** @param {string} id @param {Object} updates @returns {Promise<{data: Object|null, error: Error|null}>} */
 export async function updateDeal(id, updates) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -128,11 +107,7 @@ export async function updateDeal(id, updates) {
   return { data: data ? mapDealFromDb(data) : null, error };
 }
 
-/**
- * Delete a deal (only if PENDING)
- * @param {string} id - Deal ID
- * @returns {Promise<{error: Error|null}>}
- */
+/** @param {string} id (only if PENDING) @returns {Promise<{error: Error|null}>} */
 export async function deleteDeal(id) {
   if (!supabase) {
     return { error: { message: 'Supabase not configured' } };
@@ -150,11 +125,7 @@ export async function deleteDeal(id) {
 // Intents
 // ============================================================================
 
-/**
- * Create a new intent
- * @param {Object} intent - Intent data
- * @returns {Promise<{data: Object|null, error: Error|null}>}
- */
+/** @param {Object} intent @returns {Promise<{data: Object|null, error: Error|null}>} */
 export async function createIntent(intent) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -175,11 +146,7 @@ export async function createIntent(intent) {
   return { data: data ? mapIntentFromDb(data) : null, error };
 }
 
-/**
- * Get intents with optional filters
- * @param {Object} filters - Optional filters (tokenMint, side, creator)
- * @returns {Promise<{data: Array|null, error: Error|null}>}
- */
+/** @param {Object} filters - tokenMint, side, creator @returns {Promise<{data: Array|null, error: Error|null}>} */
 export async function getIntents(filters = {}) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };
@@ -208,12 +175,7 @@ export async function getIntents(filters = {}) {
   };
 }
 
-/**
- * Delete an intent by ID
- * @param {string} intentId - Intent ID
- * @param {string} creator - Creator wallet address (for authorization)
- * @returns {Promise<{data: Object|null, error: Error|null}>}
- */
+/** @param {string} intentId @param {string} creator (auth) @returns {Promise<{data: Object|null, error: Error|null}>} */
 export async function deleteIntent(intentId, creator) {
   if (!supabase) {
     return { data: null, error: { message: 'Supabase not configured' } };

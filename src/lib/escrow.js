@@ -9,20 +9,16 @@ import {
 import { BN } from 'bn.js';
 import { getConnection } from './solana';
 
-// Program ID - UPDATE THIS after deploying your program
-// Using a valid base58 placeholder that can be updated after deployment
 const PROGRAM_ID_STRING = process.env.NEXT_PUBLIC_ZETO_PROGRAM_ID || '11111111111111111111111111111111';
 export const PROGRAM_ID = new PublicKey(PROGRAM_ID_STRING);
 
-// Fee recipient - always 8zat... (canonical fee collection wallet)
+// Fee recipient (fixed in code)
 const FEE_RECIPIENT_STRING = '8zatMKSZT1xm7p2h7671pUmZQCv6seCd82tU1QmWmxeC';
 export const FEE_RECIPIENT = new PublicKey(FEE_RECIPIENT_STRING);
 
-// Fee basis points (0.20% — buyer / quote side only)
 export const FEE_BPS = 20;
 export const BPS_DENOMINATOR = 10000;
 
-// Deal status enum matching on-chain
 export const DealStatus = {
   Initialized: 0,
   Funded: 1,
@@ -37,11 +33,7 @@ export const DealStatusLabels = {
   3: 'CANCELLED',
 };
 
-/**
- * Generate a unique deal ID as a 32-byte array
- * @param {string} dealIdString - Human-readable deal ID string
- * @returns {Uint8Array} - 32-byte deal ID
- */
+/** @param {string} dealIdString @returns {Uint8Array} */
 export function generateDealId(dealIdString) {
   const encoder = new TextEncoder();
   const encoded = encoder.encode(dealIdString);
@@ -50,11 +42,7 @@ export function generateDealId(dealIdString) {
   return dealId;
 }
 
-/**
- * Derive the Deal PDA
- * @param {Uint8Array} dealId - 32-byte deal ID
- * @returns {Promise<[PublicKey, number]>} - [PDA, bump]
- */
+/** @param {Uint8Array} dealId @returns {Promise<[PublicKey, number]>} */
 export async function deriveDealPDA(dealId) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('deal'), Buffer.from(dealId)],
@@ -62,11 +50,7 @@ export async function deriveDealPDA(dealId) {
   );
 }
 
-/**
- * Derive the Vault PDA for a deal
- * @param {PublicKey} dealPDA - Deal account PDA
- * @returns {Promise<[PublicKey, number]>} - [PDA, bump]
- */
+/** @param {PublicKey} dealPDA @returns {Promise<[PublicKey, number]>} */
 export async function deriveVaultPDA(dealPDA) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('vault'), dealPDA.toBuffer()],
@@ -74,12 +58,7 @@ export async function deriveVaultPDA(dealPDA) {
   );
 }
 
-/**
- * Fetch deal account data from chain
- * @param {string} dealIdString - Deal ID string
- * @param {string} network - 'devnet' or 'mainnet'
- * @returns {Promise<Object|null>} - Deal data or null if not found
- */
+/** @param {string} dealIdString @param {string} network @returns {Promise<Object|null>} */
 export async function fetchDealOnChain(dealIdString, network = 'devnet') {
   try {
     const connection = getConnection(network);
@@ -162,12 +141,7 @@ export async function fetchDealOnChain(dealIdString, network = 'devnet') {
   }
 }
 
-/**
- * Check if an ATA exists
- * @param {Connection} connection - Solana connection
- * @param {PublicKey} ata - ATA address
- * @returns {Promise<boolean>}
- */
+/** @param {Connection} connection @param {PublicKey} ata @returns {Promise<boolean>} */
 export async function ataExists(connection, ata) {
   try {
     await getAccount(connection, ata);
@@ -177,14 +151,7 @@ export async function ataExists(connection, ata) {
   }
 }
 
-/**
- * Get or create ATA instruction
- * @param {Connection} connection - Solana connection
- * @param {PublicKey} payer - Payer for creation
- * @param {PublicKey} mint - Token mint
- * @param {PublicKey} owner - Token account owner
- * @returns {Promise<{address: PublicKey, instruction: TransactionInstruction|null}>}
- */
+/** @param {Connection} connection @param {PublicKey} payer @param {PublicKey} mint @param {PublicKey} owner @returns {Promise<{address: PublicKey, instruction: TransactionInstruction|null}>} */
 export async function getOrCreateATA(connection, payer, mint, owner) {
   const ata = await getAssociatedTokenAddress(mint, owner, true);
   const exists = await ataExists(connection, ata);
@@ -203,13 +170,7 @@ export async function getOrCreateATA(connection, payer, mint, owner) {
   return { address: ata, instruction };
 }
 
-/**
- * Calculate fees for a deal. Only buyer (quote side) pays 0.2%; seller pays nothing.
- * @param {string|number} baseAmount - Base token amount
- * @param {string|number} quoteAmount - Quote token amount
- * @param {number} feeBps - Fee in basis points (default 20 = 0.2%)
- * @returns {Object} - Fee calculations
- */
+/** Buyer-only 0.2% on quote. @param {string|number} baseAmount @param {string|number} quoteAmount @param {number} feeBps @returns {Object} */
 export function calculateFees(baseAmount, quoteAmount, feeBps = FEE_BPS) {
   const base = BigInt(baseAmount);
   const quote = BigInt(quoteAmount);
@@ -229,14 +190,7 @@ export function calculateFees(baseAmount, quoteAmount, feeBps = FEE_BPS) {
   };
 }
 
-/**
- * Build initialize_deal instruction data
- * @param {Uint8Array} dealId - 32-byte deal ID
- * @param {string} baseAmount - Base amount as string
- * @param {string} quoteAmount - Quote amount as string
- * @param {number} expiryTs - Expiry timestamp in seconds
- * @returns {Buffer} - Instruction data
- */
+/** @param {Uint8Array} dealId @param {string} baseAmount @param {string} quoteAmount @param {number} expiryTs @returns {Buffer} */
 export function buildInitializeDealData(dealId, baseAmount, quoteAmount, expiryTs) {
   // Anchor discriminator for initialize_deal (from IDL)
   const discriminator = Buffer.from([100, 154, 180, 148, 120, 1, 196, 122]);
@@ -252,37 +206,25 @@ export function buildInitializeDealData(dealId, baseAmount, quoteAmount, expiryT
   return Buffer.concat([discriminator, dealIdBuffer, baseAmountBuffer, quoteAmountBuffer, expiryBuffer]);
 }
 
-/**
- * Build deposit_base instruction data
- * @returns {Buffer} - Instruction data
- */
+/** @returns {Buffer} */
 export function buildDepositBaseData() {
   // Anchor discriminator for deposit_base (from IDL)
   return Buffer.from([213, 125, 25, 122, 8, 72, 100, 237]);
 }
 
-/**
- * Build accept_and_settle instruction data
- * @returns {Buffer} - Instruction data
- */
+/** @returns {Buffer} */
 export function buildAcceptAndSettleData() {
   // Anchor discriminator for accept_and_settle (from IDL)
   return Buffer.from([2, 3, 111, 42, 76, 102, 198, 115]);
 }
 
-/**
- * Build cancel_deal instruction data
- * @returns {Buffer} - Instruction data
- */
+/** @returns {Buffer} */
 export function buildCancelDealData() {
   // Anchor discriminator for cancel_deal (from IDL)
   return Buffer.from([158, 86, 193, 45, 168, 111, 48, 29]);
 }
 
-/**
- * Build reclaim_expired instruction data
- * @returns {Buffer} - Instruction data
- */
+/** @returns {Buffer} */
 export function buildReclaimExpiredData() {
   // Anchor discriminator for reclaim_expired (from IDL)
   return Buffer.from([125, 185, 48, 75, 0, 71, 93, 98]);

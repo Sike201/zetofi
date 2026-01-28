@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server';
 
-// Configure runtime for Vercel
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CACHE = new Map();
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL = 2 * 60 * 1000;
 
-/**
- * GET /api/dexscreener/token/[mint]
- * Fetches token price, price change, and image from DEXScreener.
- * @see https://docs.dexscreener.com/api/reference
- */
 export async function GET(request, { params }) {
   try {
     const { mint } = await params;

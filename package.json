@@ -1,6 +1,7 @@
 {
   "name": "zetofi",
   "version": "0.1.0",
+  "description": "Intent board and atomic settlement on Solana (Next.js, Privy, Anchor, Supabase)",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -3,7 +3,6 @@
 import { PrivyProvider } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 
-// Configure Solana wallet connectors - only show popular Solana wallets
 const solanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
 });
@@ -31,15 +30,12 @@ export default function Providers({ children }) {
         appearance: {
           theme: 'dark',
           accentColor: '#2563eb',
-          // Explicitly list Solana wallets, then show detected_solana_wallets for "More wallets"
-          // This will show other Solana wallets (excluding the ones already listed)
           walletList: ['phantom', 'solflare', 'backpack', 'jupiter'],
         },
         externalWallets: {
           solana: {
             connectors: solanaConnectors,
           },
-          // Explicitly disable Ethereum wallets to prevent MetaMask from showing
           ethereum: {
             connectors: [],
           },
