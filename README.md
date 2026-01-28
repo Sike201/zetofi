@@ -87,7 +87,7 @@ The Privy provider is configured in `src/app/layout.js`. You can customize:
   - Quote token (payment)
   - Counterparty address
   - Expiry time
-- Fee preview (0.10% each side, success-only)
+- Fee preview (0.20% buy side, success-only)
 - Test message signing functionality
 - Generates shareable deal links
 
