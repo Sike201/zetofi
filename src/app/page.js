@@ -82,6 +82,7 @@ export default function IntentBoardPage() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [selectedTokenMint, setSelectedTokenMint] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -189,10 +190,21 @@ export default function IntentBoardPage() {
     setFilteredIntents(filtered);
   }, [intents, search, filters]);
 
-  const sortedMints = useMemo(
-    () => [...new Set(filteredIntents.map((i) => i.tokenMint).filter(Boolean))],
-    [filteredIntents]
-  );
+  const tokenList = useMemo(() => {
+    const byMint = {};
+    filteredIntents.forEach((i) => {
+      const m = i.tokenMint;
+      if (!m) return;
+      if (!byMint[m]) byMint[m] = { mint: m, symbol: i.tokenSymbol || '—', buyCount: 0, sellCount: 0 };
+      if (i.side === 'BUY') byMint[m].buyCount += 1;
+      else if (i.side === 'SELL') byMint[m].sellCount += 1;
+    });
+    const list = Object.values(byMint);
+    list.sort((a, b) => (b.buyCount + b.sellCount) - (a.buyCount + a.sellCount));
+    return list;
+  }, [filteredIntents]);
+
+  const sortedMints = useMemo(() => tokenList.map((t) => t.mint), [tokenList]);
 
   useEffect(() => {
     sortedMints.forEach((mint) => {
@@ -329,21 +341,30 @@ export default function IntentBoardPage() {
   }
 
   const sorted = [...filteredIntents].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  
-  // Calculate stats
-  const uniqueTokens = new Set(filteredIntents.map((i) => i.tokenMint).filter(Boolean)).size;
+
+  const uniqueTokens = tokenList.length;
   const totalIntents = filteredIntents.length;
-  
-  // Pagination
-  const totalPages = Math.ceil(sorted.length / itemsPerPage);
+
+  const totalPages = Math.ceil(tokenList.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedIntents = sorted.slice(startIndex, endIndex);
-  
-  // Reset to page 1 when filters change
+  const paginatedTokens = tokenList.slice(startIndex, endIndex);
+
+  const intentsForSelectedToken = useMemo(() => {
+    if (!selectedTokenMint) return { buy: [], sell: [] };
+    const forToken = filteredIntents.filter((i) => i.tokenMint === selectedTokenMint);
+    const buy = forToken.filter((i) => i.side === 'BUY').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const sell = forToken.filter((i) => i.side === 'SELL').sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return { buy, sell };
+  }, [filteredIntents, selectedTokenMint]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [search, filters.side, itemsPerPage]);
+
+  useEffect(() => {
+    if (selectedTokenMint) setCurrentPage(1);
+  }, [selectedTokenMint]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -394,49 +415,51 @@ export default function IntentBoardPage() {
         </div>
       </ScrollReveal>
 
-      <ScrollReveal transition={{ duration: 0.4, delay: 0.1 }}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
-          <div className="relative min-w-0 flex-1 max-w-md">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search asset name, symbol, or address"
-              className="w-full rounded-lg bg-[#1a1a1a] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-0"
-            />
+      {!selectedTokenMint && (
+        <ScrollReveal transition={{ duration: 0.4, delay: 0.1 }}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+            <div className="relative min-w-0 flex-1 max-w-md">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search asset name, symbol, or address"
+                className="w-full rounded-lg bg-[#1a1a1a] py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-0"
+              />
+            </div>
+            <div className="flex items-end gap-3 sm:shrink-0">
+              <Select
+                label="Side"
+                value={filters.side}
+                onChange={(e) => setFilters({ ...filters, side: e.target.value })}
+                options={[{ value: '', label: 'All sides' }, ...SIDES]}
+                className="max-w-[120px]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!authenticated) {
+                    login();
+                    return;
+                  }
+                  setShowForm(!showForm);
+                  setSubmitError('');
+                }}
+                className="rounded-lg bg-[#2a2a2a] px-3 py-2 text-xs font-medium text-white hover:bg-[#333] transition-colors focus:outline-none whitespace-nowrap"
+              >
+                {showForm ? 'Cancel' : '+ New Intent'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-end gap-3 sm:shrink-0">
-            <Select
-              label="Side"
-              value={filters.side}
-              onChange={(e) => setFilters({ ...filters, side: e.target.value })}
-              options={[{ value: '', label: 'All sides' }, ...SIDES]}
-              className="max-w-[120px]"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (!authenticated) {
-                  login();
-                  return;
-                }
-                setShowForm(!showForm);
-                setSubmitError('');
-              }}
-              className="rounded-lg bg-[#2a2a2a] px-3 py-2 text-xs font-medium text-white hover:bg-[#333] transition-colors focus:outline-none whitespace-nowrap"
-            >
-              {showForm ? 'Cancel' : '+ New Intent'}
-            </button>
-          </div>
-        </div>
-      </ScrollReveal>
+        </ScrollReveal>
+      )}
 
-      {showForm && (
+      {showForm && !selectedTokenMint && (
         <div className="mt-6 rounded-xl bg-[#0d0d0d] p-6">
           <h2 className="mb-4 text-xl font-semibold text-white">Create New Intent</h2>
           {!authenticated && (
@@ -562,141 +585,265 @@ export default function IntentBoardPage() {
 
       <ScrollReveal transition={{ duration: 0.4, delay: 0.15 }}>
         <div className="mt-8">
-          <h2 className="mb-4 text-lg font-semibold text-white">Intent assets</h2>
-          <div className="overflow-hidden rounded-lg bg-[#141414]">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white/60">Asset</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white/60">Side</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">Size</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">24h %</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white/60">Contact</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">Date</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedIntents.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-white/50">
-                        No intents found. Create one to get started.
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedIntents.map((intent) => {
-                      const meta = tokenMeta[intent.tokenMint] || {};
-                      const sizeLabel = SIZE_BUCKETS.find((b) => b.value === intent.sizeBucket)?.label || intent.sizeBucket || '—';
-                      return (
-                        <tr
-                          key={intent.id || intent.tokenMint}
-                          className="border-b border-white/[0.04] transition-colors last:border-b-0 hover:bg-white/[0.03]"
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#2a2a2a]">
-                                {meta.imageUrl ? (
-                                  <img
-                                    src={meta.imageUrl}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="flex h-full w-full items-center justify-center text-sm font-medium text-white">
-                                    {(intent.tokenSymbol || '?').slice(0, 2)}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-medium text-white">{intent.tokenSymbol || '—'}</p>
-                                <p className="text-xs text-white/50 font-mono">{truncateMint(intent.tokenMint)}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-sm text-white/80">{intent.side || '—'}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm text-white/70">{sizeLabel}</td>
-                          <td className="px-4 py-3 text-right font-mono text-sm text-white">
-                            {meta.priceUsd != null ? `$${meta.priceUsd}` : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {meta.priceChange24h != null ? (
-                              <span className={meta.priceChange24h >= 0 ? 'text-white' : 'text-white/70'}>
-                                {meta.priceChange24h >= 0 ? '+' : ''}{meta.priceChange24h.toFixed(2)}%
-                              </span>
-                            ) : (
-                              <span className="text-white/50">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-left text-sm text-white/70">
-                            {formatContact(intent)}
-                          </td>
-                          <td className="px-4 py-3 text-right text-sm text-white/70">
-                            {intent.createdAt ? formatDate(intent.createdAt) : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {authenticated && walletAddress && intent.creator === walletAddress && (
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(intent.id)}
-                                className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none"
-                                aria-label="Delete intent"
-                              >
-                                Delete
-                              </button>
-                            )}
+          {selectedTokenMint ? (
+            <>
+              <div className="mb-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTokenMint(null)}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#2a2a2a] px-3 py-2 text-sm text-white/90 hover:bg-[#333] focus:outline-none"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back to tokens
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#2a2a2a]">
+                    {(tokenMeta[selectedTokenMint]?.imageUrl) ? (
+                      <img src={tokenMeta[selectedTokenMint].imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-sm font-medium text-white">
+                        {(intentsForSelectedToken.buy[0]?.tokenSymbol || intentsForSelectedToken.sell[0]?.tokenSymbol || '?').slice(0, 2)}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      {intentsForSelectedToken.buy[0]?.tokenSymbol || intentsForSelectedToken.sell[0]?.tokenSymbol || 'Token'}
+                    </h2>
+                    <p className="text-xs font-mono text-white/50">{truncateMint(selectedTokenMint)}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!authenticated) { login(); return; }
+                    setShowForm(!showForm);
+                    setSubmitError('');
+                    if (!showForm) {
+                      const sym = intentsForSelectedToken.buy[0]?.tokenSymbol || intentsForSelectedToken.sell[0]?.tokenSymbol || '';
+                      setFormData((prev) => ({ ...prev, tokenMint: selectedTokenMint, tokenSymbol: sym }));
+                    }
+                  }}
+                  className="ml-auto rounded-lg bg-[#2a2a2a] px-3 py-2 text-xs font-medium text-white hover:bg-[#333] transition-colors focus:outline-none"
+                >
+                  {showForm ? 'Cancel' : '+ New Intent'}
+                </button>
+              </div>
+              {showForm && (
+                <div className="mb-6 rounded-xl bg-[#0d0d0d] p-6">
+                  <h2 className="mb-4 text-xl font-semibold text-white">Create New Intent</h2>
+                  {!authenticated && (
+                    <div className="mb-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3 text-sm text-yellow-400">Please sign in to create an intent.</div>
+                  )}
+                  {submitError && <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">{submitError}</div>}
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <TokenInput label="Token Mint" value={formData.tokenMint} onChange={(e) => setFormData({ ...formData, tokenMint: e.target.value })} onTokenInfo={onTokenInfo} placeholder="Token mint address" error={errors.tokenMint} required />
+                      <Input label="Token Symbol" value={formData.tokenSymbol} onChange={(e) => setFormData({ ...formData, tokenSymbol: e.target.value })} placeholder="e.g. SOL" error={errors.tokenSymbol} required />
+                      <Select label="Side" value={formData.side} onChange={(e) => setFormData({ ...formData, side: e.target.value })} options={SIDES} required />
+                      <Select label="Size" value={formData.sizeBucket} onChange={(e) => setFormData({ ...formData, sizeBucket: e.target.value })} options={SIZE_BUCKETS} required />
+                      <Select label="Contact type" value={formData.contactType} onChange={(e) => setFormData({ ...formData, contactType: e.target.value, contactSecondary: e.target.value === 'both' ? formData.contactSecondary : '' })} options={CONTACT_TYPES} required />
+                      {formData.contactType === 'twitter' && <Input label="Twitter handle" value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value })} placeholder="@username" error={errors.contact} required />}
+                      {formData.contactType === 'telegram' && <Input label="Telegram handle" value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value })} placeholder="@username or t.me/username" error={errors.contact} required />}
+                      {formData.contactType === 'both' && (
+                        <>
+                          <Input label="Twitter handle" value={formData.contact} onChange={(e) => setFormData({ ...formData, contact: e.target.value })} placeholder="@username" error={errors.contact} required />
+                          <Input label="Telegram handle" value={formData.contactSecondary} onChange={(e) => setFormData({ ...formData, contactSecondary: e.target.value })} placeholder="@username or t.me/username" error={errors.contactSecondary} required />
+                        </>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <button type="button" onClick={() => { setShowForm(false); setErrors({}); setSubmitError(''); }} className="rounded-lg bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white/90 hover:bg-[#333] focus:outline-none">Cancel</button>
+                      <button type="submit" disabled={!authenticated || isSubmitting} className="rounded-lg bg-[#2a2a2a] px-4 py-2 text-sm font-medium text-white hover:bg-[#333] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">{isSubmitting ? 'Creating...' : 'Create Intent'}</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+              <div className="space-y-6">
+                <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.04] via-[#141414] to-[#050505] shadow-[0_18px_60px_rgba(0,0,0,0.7)]">
+                  <h3 className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs font-medium uppercase tracking-wide text-green-300">
+                    <span>Offers to buy</span>
+                    <span className="rounded-full bg-green-500/10 px-2.5 py-0.5 text-[11px] font-medium text-green-300">
+                      {intentsForSelectedToken.buy.length} active
+                    </span>
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-white/[0.06]">
+                          <th className="px-4 py-2 text-left text-xs font-medium uppercase text-white/60">Size</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium uppercase text-white/60">Contact</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium uppercase text-white/60">Date</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium uppercase text-white/60" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {intentsForSelectedToken.buy.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-6 text-center text-sm text-white/50">No buy intents yet.</td>
+                          </tr>
+                        ) : (
+                          intentsForSelectedToken.buy.map((intent) => {
+                            const sizeLabel = SIZE_BUCKETS.find((b) => b.value === intent.sizeBucket)?.label || intent.sizeBucket || '—';
+                            return (
+                              <tr key={intent.id} className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03]">
+                                <td className="px-4 py-3 text-sm text-white/80">{sizeLabel}</td>
+                                <td className="px-4 py-3 text-sm text-white/70">{formatContact(intent)}</td>
+                                <td className="px-4 py-3 text-right text-sm text-white/50">{intent.createdAt ? formatDate(intent.createdAt) : '—'}</td>
+                                <td className="px-4 py-3 text-right">
+                                  {authenticated && walletAddress && intent.creator === walletAddress && (
+                                    <button type="button" onClick={() => handleDelete(intent.id)} className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none">Delete</button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.04] via-[#141414] to-[#050505] shadow-[0_18px_60px_rgba(0,0,0,0.7)]">
+                  <h3 className="flex items-center justify-between border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs font-medium uppercase tracking-wide text-red-300">
+                    <span>Offers to sell</span>
+                    <span className="rounded-full bg-red-500/10 px-2.5 py-0.5 text-[11px] font-medium text-red-300">
+                      {intentsForSelectedToken.sell.length} active
+                    </span>
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[500px]">
+                      <thead>
+                        <tr className="border-b border-white/[0.06]">
+                          <th className="px-4 py-2 text-left text-xs font-medium uppercase text-white/60">Size</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium uppercase text-white/60">Contact</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium uppercase text-white/60">Date</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium uppercase text-white/60" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {intentsForSelectedToken.sell.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-6 text-center text-sm text-white/50">No sell intents yet.</td>
+                          </tr>
+                        ) : (
+                          intentsForSelectedToken.sell.map((intent) => {
+                            const sizeLabel = SIZE_BUCKETS.find((b) => b.value === intent.sizeBucket)?.label || intent.sizeBucket || '—';
+                            return (
+                              <tr key={intent.id} className="border-b border-white/[0.04] last:border-b-0 hover:bg-white/[0.03]">
+                                <td className="px-4 py-3 text-sm text-white/80">{sizeLabel}</td>
+                                <td className="px-4 py-3 text-sm text-white/70">{formatContact(intent)}</td>
+                                <td className="px-4 py-3 text-right text-sm text-white/50">{intent.createdAt ? formatDate(intent.createdAt) : '—'}</td>
+                                <td className="px-4 py-3 text-right">
+                                  {authenticated && walletAddress && intent.creator === walletAddress && (
+                                    <button type="button" onClick={() => handleDelete(intent.id)} className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none">Delete</button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="mb-4 text-lg font-semibold text-white">Tokens</h2>
+              <div className="overflow-hidden rounded-lg bg-[#141414]">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-white/[0.06]">
+                        <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-white/60">Token</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">Market cap</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">Price</th>
+                        <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-white/60">24h %</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white/60">Buys</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-white/60">Sells</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedTokens.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-12 text-center text-white/50">
+                            No tokens found. Create an intent to get started.
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          
-          {/* Pagination Controls */}
-          {sorted.length > 0 && (
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-white/50">Items per page</span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  options={[
-                    { value: '10', label: '10' },
-                    { value: '25', label: '25' },
-                    { value: '50', label: '50' },
-                  ]}
-                  className="max-w-[80px]"
-                />
+                      ) : (
+                        paginatedTokens.map((t) => {
+                          const meta = tokenMeta[t.mint] || {};
+                          return (
+                            <tr
+                              key={t.mint}
+                              onClick={() => setSelectedTokenMint(t.mint)}
+                              className="group cursor-pointer border-b border-white/[0.04] transition-colors last:border-b-0 hover:bg-white/[0.06]"
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-[#2a2a2a]">
+                                    {meta.imageUrl ? (
+                                      <img src={meta.imageUrl} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      <span className="flex h-full w-full items-center justify-center text-sm font-medium text-white">{(t.symbol || '?').slice(0, 2)}</span>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-white">{t.symbol || '—'}</p>
+                                    <p className="text-xs text-white/50 font-mono">{truncateMint(t.mint)}</p>
+                                    <p className="mt-0.5 text-[11px] text-white/25 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                                      Click to view intents
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-sm text-white/80">
+                                {meta.marketCap != null ? formatVolume(meta.marketCap) : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-sm text-white">
+                                {meta.priceUsd != null ? `$${Number(meta.priceUsd) < 0.01 ? meta.priceUsd : meta.priceUsd.toFixed(4)}` : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {meta.priceChange24h != null ? (
+                                  <span className={meta.priceChange24h >= 0 ? 'text-white' : 'text-white/70'}>
+                                    {meta.priceChange24h >= 0 ? '+' : ''}{meta.priceChange24h.toFixed(2)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-white/50">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center text-sm text-white/80">{t.buyCount}</td>
+                              <td className="px-4 py-3 text-center text-sm text-white/80">{t.sellCount}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="rounded px-2 py-1.5 text-sm text-white/50 hover:bg-white/[0.06] hover:text-white/80 disabled:pointer-events-none disabled:opacity-30"
-                >
-                  Previous
-                </button>
-                <span className="min-w-[7ch] px-2 py-1.5 text-center text-sm text-white/40">
-                  {currentPage} / {totalPages || 1}
-                </span>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages || 1, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  className="rounded px-2 py-1.5 text-sm text-white/50 hover:bg-white/[0.06] hover:text-white/80 disabled:pointer-events-none disabled:opacity-30"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+              {tokenList.length > 0 && (
+                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-white/50">Items per page</span>
+                    <Select
+                      value={itemsPerPage.toString()}
+                      onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                      options={[{ value: '10', label: '10' }, { value: '25', label: '25' }, { value: '50', label: '50' }]}
+                      className="max-w-[80px]"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-1">
+                    <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="rounded px-2 py-1.5 text-sm text-white/50 hover:bg-white/[0.06] hover:text-white/80 disabled:pointer-events-none disabled:opacity-30">Previous</button>
+                    <span className="min-w-[7ch] px-2 py-1.5 text-center text-sm text-white/40">{currentPage} / {totalPages}</span>
+                    <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages} className="rounded px-2 py-1.5 text-sm text-white/50 hover:bg-white/[0.06] hover:text-white/80 disabled:pointer-events-none disabled:opacity-30">Next</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </ScrollReveal>

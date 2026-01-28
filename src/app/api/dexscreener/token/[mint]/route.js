@@ -56,10 +56,12 @@ export async function GET(request, { params }) {
           const priceUsd = pair.priceUsd ?? null;
           const priceChange = pair.priceChange?.h24 ?? null;
           const imageUrl = pair.info?.imageUrl ?? pair.baseToken?.info?.imageUrl ?? pair.quoteToken?.info?.imageUrl ?? null;
+          const mcap = pair.fdv ?? pair.marketCap ?? pair.fdvs ?? null;
 
           const result = {
             priceUsd: priceUsd ? Number(priceUsd) : null,
             priceChange24h: priceChange != null ? Number(priceChange) : null,
+            marketCap: mcap != null ? Number(mcap) : null,
             imageUrl,
             symbol: token?.symbol ?? null,
             name: token?.name ?? null,
@@ -110,10 +112,12 @@ export async function GET(request, { params }) {
             const priceUsd = pair.priceUsd ?? null;
             const priceChange = pair.priceChange?.h24 ?? null;
             const imageUrl = pair.info?.imageUrl ?? pair.baseToken?.info?.imageUrl ?? pair.quoteToken?.info?.imageUrl ?? null;
+            const mcap = pair.fdv ?? pair.marketCap ?? pair.fdvs ?? null;
 
             const result = {
               priceUsd: priceUsd ? Number(priceUsd) : null,
               priceChange24h: priceChange != null ? Number(priceChange) : null,
+              marketCap: mcap != null ? Number(mcap) : null,
               imageUrl,
               symbol: token?.symbol ?? null,
               name: token?.name ?? null,
@@ -130,7 +134,7 @@ export async function GET(request, { params }) {
 
       // If both endpoints fail, return empty data
       console.warn(`DexScreener API returned non-ok status for mint ${mint}`);
-      const empty = { priceUsd: null, priceChange24h: null, imageUrl: null, symbol: null, name: null };
+      const empty = { priceUsd: null, priceChange24h: null, marketCap: null, imageUrl: null, symbol: null, name: null };
       CACHE.set(mint, { data: empty, timestamp: Date.now() });
       return NextResponse.json(empty, { status: 200 });
       
@@ -146,7 +150,7 @@ export async function GET(request, { params }) {
   } catch (e) {
     console.error('DEXScreener token fetch error:', e.message || e);
     return NextResponse.json(
-      { priceUsd: null, priceChange24h: null, imageUrl: null, symbol: null, name: null },
+      { priceUsd: null, priceChange24h: null, marketCap: null, imageUrl: null, symbol: null, name: null },
       { status: 200 }
     );
   }
