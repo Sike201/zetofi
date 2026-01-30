@@ -8,6 +8,7 @@ export default function TokenInput({
   value,
   onChange,
   onTokenInfo,
+  onTokenSelect,
   placeholder = 'Token mint address',
   error,
   required = false,
@@ -97,6 +98,10 @@ export default function TokenInput({
 
   const handleDropdownClick = () => {
     setShowDropdown(false);
+    const mint = tokenInfo?.mint ?? tokenInfo?.address ?? value;
+    if (mint && onTokenSelect) {
+      onTokenSelect(mint);
+    }
   };
 
   const isValid = value && isValidPubkey(value);

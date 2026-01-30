@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import NumberFlow, { continuous } from '@number-flow/react';
 import { usePrivy } from '@privy-io/react-auth';
+import { useWallets as useSolanaWallets, useSignMessage } from '@privy-io/react-auth/solana';
 import Input from '@/components/Input';
 import Select from '@/components/Select';
 import TokenInput from '@/components/TokenInput';
@@ -68,8 +69,25 @@ function formatContact(intent) {
   return contact || '—';
 }
 
+function uint8ArrayToBase64(bytes) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+  return typeof btoa !== 'undefined' ? btoa(binary) : Buffer.from(bytes).toString('base64');
+}
+
+// Must match server verifySignature.js message format
+function createIntentMessage() {
+  return `Zeto create intent\n${Date.now()}`;
+}
+function deleteIntentMessage(intentId) {
+  return `Zeto delete intent\n${intentId}\n${Date.now()}`;
+}
+
 export default function IntentBoardPage() {
   const { ready, authenticated, user, login } = usePrivy();
+  const { wallets: solanaWallets } = useSolanaWallets();
+  const { signMessage } = useSignMessage();
   const [intents, setIntents] = useState([]);
   const [filteredIntents, setFilteredIntents] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -86,6 +104,7 @@ export default function IntentBoardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [confirmedTokenMint, setConfirmedTokenMint] = useState(null);
 
   const [formData, setFormData] = useState({
     tokenSymbol: '',
@@ -99,8 +118,11 @@ export default function IntentBoardPage() {
 
   const [errors, setErrors] = useState({});
 
-  // Get wallet address for authenticated user
   const walletAddress = user?.wallet?.address;
+  const activeSolanaWallet = useMemo(
+    () => solanaWallets?.find((w) => w.address === walletAddress) || solanaWallets?.[0] || null,
+    [solanaWallets, walletAddress]
+  );
 
   const onTokenInfo = useCallback((info) => {
     setFormData((prev) => ({ ...prev, tokenSymbol: info?.symbol ?? '' }));
@@ -226,6 +248,9 @@ export default function IntentBoardPage() {
     const newErrors = {};
     if (!formData.tokenSymbol?.trim()) newErrors.tokenSymbol = 'Token symbol is required';
     if (!formData.tokenMint?.trim()) newErrors.tokenMint = 'Token mint is required';
+    if (formData.tokenMint?.trim() && formData.tokenMint.trim() !== confirmedTokenMint) {
+      newErrors.tokenMint = 'Please select the token from the dropdown to confirm it is a verified token.';
+    }
     if (formData.contactType === 'both') {
       if (!formData.contact?.trim()) newErrors.contact = 'Twitter handle is required';
       if (!formData.contactSecondary?.trim()) newErrors.contactSecondary = 'Telegram handle is required';
@@ -240,10 +265,15 @@ export default function IntentBoardPage() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    // Check authentication
+    // Check authentication and Solana wallet
     if (!authenticated || !walletAddress) {
       setSubmitError('Please sign in to create an intent');
       login();
+      return;
+    }
+    if (!activeSolanaWallet) {
+      setSubmitError('Solana wallet not available. Please connect a Solana wallet.');
+      setIsSubmitting(false);
       return;
     }
 
@@ -251,6 +281,14 @@ export default function IntentBoardPage() {
     setSubmitError('');
 
     try {
+      const message = createIntentMessage();
+      const { signature: signatureBytes } = await signMessage({
+        message: new TextEncoder().encode(message),
+        wallet: activeSolanaWallet,
+        options: { uiOptions: { title: 'Sign to create intent' } },
+      });
+      const signature = uint8ArrayToBase64(signatureBytes);
+
       // Format contact based on contactType
       let contactValue = formData.contact.trim();
       if (formData.contactType === 'both') {
@@ -268,7 +306,9 @@ export default function IntentBoardPage() {
           side: formData.side,
           sizeBucket: formData.sizeBucket,
           contact: contactValue,
-          creator: walletAddress,
+          creator: activeSolanaWallet.address,
+          message,
+          signature,
         }),
       });
 
@@ -276,8 +316,12 @@ export default function IntentBoardPage() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          setSubmitError('Please sign in to create an intent');
-          login();
+          // Show actual server error - could be auth or signature issue
+          setSubmitError(data.error || 'Authentication failed. Please try again.');
+          // Only prompt login if not already authenticated
+          if (!authenticated) {
+            login();
+          }
         } else if (response.status === 403) {
           setSubmitError(data.error || 'Maximum limit reached. You can have up to 7 active intents.');
         } else {
@@ -290,6 +334,7 @@ export default function IntentBoardPage() {
       // Success - reload intents and reset form
       await loadIntents();
       setShowForm(false);
+      setConfirmedTokenMint(null);
       setFormData({
         tokenSymbol: '',
         tokenMint: '',
@@ -311,9 +356,10 @@ export default function IntentBoardPage() {
 
   async function handleDelete(id) {
     if (!id) return;
-    
-    // Check authentication
-    if (!authenticated || !walletAddress) {
+
+    if (!authenticated || !walletAddress) return;
+    if (!activeSolanaWallet) {
+      alert('Solana wallet not available. Please connect a Solana wallet.');
       return;
     }
 
@@ -322,8 +368,23 @@ export default function IntentBoardPage() {
     }
 
     try {
-      const response = await fetch(`/api/intents?id=${id}&creator=${walletAddress}`, {
+      const message = deleteIntentMessage(id);
+      const { signature: signatureBytes } = await signMessage({
+        message: new TextEncoder().encode(message),
+        wallet: activeSolanaWallet,
+        options: { uiOptions: { title: 'Sign to delete intent' } },
+      });
+      const signature = uint8ArrayToBase64(signatureBytes);
+
+      const response = await fetch('/api/intents', {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          creator: activeSolanaWallet.address,
+          message,
+          signature,
+        }),
       });
 
       if (!response.ok) {
@@ -477,8 +538,12 @@ export default function IntentBoardPage() {
               <TokenInput
                 label="Token Mint"
                 value={formData.tokenMint}
-                onChange={(e) => setFormData({ ...formData, tokenMint: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, tokenMint: e.target.value });
+                  setConfirmedTokenMint(null);
+                }}
                 onTokenInfo={onTokenInfo}
+                onTokenSelect={setConfirmedTokenMint}
                 placeholder="Token mint address"
                 error={errors.tokenMint}
                 required
@@ -640,7 +705,19 @@ export default function IntentBoardPage() {
                   {submitError && <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">{submitError}</div>}
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      <TokenInput label="Token Mint" value={formData.tokenMint} onChange={(e) => setFormData({ ...formData, tokenMint: e.target.value })} onTokenInfo={onTokenInfo} placeholder="Token mint address" error={errors.tokenMint} required />
+                      <TokenInput
+                        label="Token Mint"
+                        value={formData.tokenMint}
+                        onChange={(e) => {
+                          setFormData({ ...formData, tokenMint: e.target.value });
+                          setConfirmedTokenMint(null);
+                        }}
+                        onTokenInfo={onTokenInfo}
+                        onTokenSelect={setConfirmedTokenMint}
+                        placeholder="Token mint address"
+                        error={errors.tokenMint}
+                        required
+                      />
                       <Input label="Token Symbol" value={formData.tokenSymbol} onChange={(e) => setFormData({ ...formData, tokenSymbol: e.target.value })} placeholder="e.g. SOL" error={errors.tokenSymbol} required />
                       <Select label="Side" value={formData.side} onChange={(e) => setFormData({ ...formData, side: e.target.value })} options={SIDES} required />
                       <Select label="Size" value={formData.sizeBucket} onChange={(e) => setFormData({ ...formData, sizeBucket: e.target.value })} options={SIZE_BUCKETS} required />
@@ -693,7 +770,7 @@ export default function IntentBoardPage() {
                                 <td className="px-4 py-3 text-sm text-white/70">{formatContact(intent)}</td>
                                 <td className="px-4 py-3 text-right text-sm text-white/50">{intent.createdAt ? formatDate(intent.createdAt) : '—'}</td>
                                 <td className="px-4 py-3 text-right">
-                                  {authenticated && walletAddress && intent.creator === walletAddress && (
+                                  {authenticated && activeSolanaWallet && intent.creator === activeSolanaWallet.address && (
                                     <button type="button" onClick={() => handleDelete(intent.id)} className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none">Delete</button>
                                   )}
                                 </td>
@@ -736,7 +813,7 @@ export default function IntentBoardPage() {
                                 <td className="px-4 py-3 text-sm text-white/70">{formatContact(intent)}</td>
                                 <td className="px-4 py-3 text-right text-sm text-white/50">{intent.createdAt ? formatDate(intent.createdAt) : '—'}</td>
                                 <td className="px-4 py-3 text-right">
-                                  {authenticated && walletAddress && intent.creator === walletAddress && (
+                                  {authenticated && activeSolanaWallet && intent.creator === activeSolanaWallet.address && (
                                     <button type="button" onClick={() => handleDelete(intent.id)} className="rounded bg-[#2a2a2a] px-2 py-1 text-xs text-white/70 hover:bg-red-500/20 hover:text-white focus:outline-none">Delete</button>
                                   )}
                                 </td>

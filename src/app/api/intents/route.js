@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createIntent, getIntents, deleteIntent } from '@/lib/supabase';
+import { verifySolanaMessage, verifyCreateMessage, verifyDeleteMessage } from '@/lib/verifySignature';
 
 // Configure runtime for Vercel
 export const runtime = 'nodejs';
@@ -40,25 +41,37 @@ export async function GET(request) {
 }
 
 // POST /api/intents - Create a new intent
-// Requires authentication - user must be signed in
+// Requires signed message proving wallet ownership
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { tokenSymbol, tokenMint, side, sizeBucket, contact, creator } = body;
+    const { tokenSymbol, tokenMint, side, sizeBucket, contact, creator, message, signature } = body;
 
-    // Validate authentication - creator (wallet address) is required
-    if (!creator) {
+    if (!creator || !message || !signature) {
       return NextResponse.json(
-        { error: 'Authentication required. Please sign in to create an intent.' },
+        { error: 'Authentication required. Sign the message with your wallet.' },
         { status: 401 }
       );
     }
 
-    // Validate wallet address format (basic check)
     if (creator.length < 32 || creator.length > 44) {
       return NextResponse.json(
         { error: 'Invalid wallet address' },
         { status: 400 }
+      );
+    }
+
+    if (!verifyCreateMessage(message)) {
+      return NextResponse.json(
+        { error: 'Invalid or expired message. Please try again.' },
+        { status: 401 }
+      );
+    }
+
+    if (!verifySolanaMessage(message, signature, creator)) {
+      return NextResponse.json(
+        { error: 'Invalid signature. Sign the message with your wallet.' },
+        { status: 401 }
       );
     }
 
@@ -133,26 +146,45 @@ export async function POST(request) {
 }
 
 // DELETE /api/intents - Delete an intent
-// Requires authentication - user can only delete their own intents
+// Requires signed message proving wallet ownership. Send id, creator, message, signature in body.
 export async function DELETE(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const intentId = searchParams.get('id');
-    const creator = searchParams.get('creator');
+    let body = null;
+    try {
+      body = await request.json();
+    } catch {
+      // No body
+    }
+    const intentId = body?.id ?? request.nextUrl?.searchParams?.get('id');
+    const creator = body?.creator ?? request.nextUrl?.searchParams?.get('creator');
+    const message = body?.message;
+    const signature = body?.signature;
 
-    // Validate authentication
-    if (!creator) {
+    if (!creator || !message || !signature) {
       return NextResponse.json(
-        { error: 'Authentication required. Please sign in to delete an intent.' },
+        { error: 'Authentication required. Sign the message with your wallet.' },
         { status: 401 }
       );
     }
 
-    // Validate intent ID
     if (!intentId) {
       return NextResponse.json(
         { error: 'Intent ID is required' },
         { status: 400 }
+      );
+    }
+
+    if (!verifyDeleteMessage(message, intentId)) {
+      return NextResponse.json(
+        { error: 'Invalid or expired message. Please try again.' },
+        { status: 401 }
+      );
+    }
+
+    if (!verifySolanaMessage(message, signature, creator)) {
+      return NextResponse.json(
+        { error: 'Invalid signature. Sign the message with your wallet.' },
+        { status: 401 }
       );
     }
 
