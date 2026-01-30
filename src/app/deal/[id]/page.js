@@ -198,18 +198,23 @@ export default function DealPage() {
     }
   }
 
-  // Determine actual status from on-chain data if available
-  const actualStatus = onChainData?.statusLabel || deal?.status || 'UNKNOWN';
+  // Determine actual status: prefer API (deal.status) when it's terminal, else on-chain label
+  const apiStatus = (deal?.status || '').toUpperCase();
+  const isTerminalFromApi = apiStatus === 'SETTLED' || apiStatus === 'CANCELLED';
+  const actualStatus = isTerminalFromApi ? apiStatus : (onChainData?.statusLabel || deal?.status || 'UNKNOWN');
+  const actualStatusUpper = (actualStatus || '').toUpperCase();
+
   const isExpired = deal && deal.expiryTs && deal.expiryTs < Math.floor(Date.now() / 1000);
   const isSeller = deal && authenticated && walletAddress === deal.seller;
   const isBuyer = deal && authenticated && walletAddress === deal.buyer;
   const isParticipant = isSeller || isBuyer;
 
   // Action availability — hide Accept & Cancel once deal is settled/cancelled or we just completed one of those actions
-  const canBuyerAccept = isBuyer && actualStatus === 'FUNDED' && !isExpired;
-  const canSellerCancel = isSeller && (actualStatus === 'INITIALIZED' || actualStatus === 'FUNDED');
+  const canBuyerAccept = isBuyer && actualStatusUpper === 'FUNDED' && !isExpired;
+  const canSellerCancel = isSeller && (actualStatusUpper === 'INITIALIZED' || actualStatusUpper === 'FUNDED');
   const justCompletedAcceptOrCancel = !!txSignature && !isProcessing;
-  const hideAcceptAndCancel = actualStatus === 'SETTLED' || actualStatus === 'CANCELLED' || justCompletedAcceptOrCancel;
+  const hideAcceptAndCancel =
+    actualStatusUpper === 'SETTLED' || actualStatusUpper === 'CANCELLED' || justCompletedAcceptOrCancel;
 
   if (loading) {
     return (
@@ -284,13 +289,13 @@ export default function DealPage() {
             <div className="flex items-center gap-2">
               <span
                 className={`rounded-full border px-3 py-1 text-sm font-medium ${
-                  actualStatus === 'SETTLED'
+                  actualStatusUpper === 'SETTLED'
                     ? 'border-white/40 bg-white/10 text-white'
-                    : actualStatus === 'CANCELLED'
+                    : actualStatusUpper === 'CANCELLED'
                     ? 'border-white/20 bg-white/5 text-white/70'
-                    : actualStatus === 'FUNDED'
+                    : actualStatusUpper === 'FUNDED'
                     ? 'border-green-500/50 bg-green-500/10 text-green-400'
-                    : actualStatus === 'INITIALIZED'
+                    : actualStatusUpper === 'INITIALIZED'
                     ? 'border-white/25 bg-white/5 text-white/80'
                     : isExpired
                     ? 'border-white/20 bg-white/5 text-white/60'
@@ -298,7 +303,7 @@ export default function DealPage() {
                 }`}
               >
                 {actualStatus}
-                {isExpired && actualStatus !== 'SETTLED' && actualStatus !== 'CANCELLED' ? ' (Expired)' : ''}
+                {isExpired && actualStatusUpper !== 'SETTLED' && actualStatusUpper !== 'CANCELLED' ? ' (Expired)' : ''}
               </span>
             </div>
           </div>
@@ -497,15 +502,15 @@ export default function DealPage() {
               <p className="self-center text-sm text-white/60">You are not a participant in this deal</p>
             )}
 
-            {authenticated && isParticipant && actualStatus === 'SETTLED' && (
+            {authenticated && isParticipant && actualStatusUpper === 'SETTLED' && (
               <p className="self-center text-sm text-white/80">✓ This deal has been settled</p>
             )}
 
-            {authenticated && isParticipant && actualStatus === 'CANCELLED' && (
+            {authenticated && isParticipant && actualStatusUpper === 'CANCELLED' && (
               <p className="self-center text-sm text-white/60">This deal was cancelled</p>
             )}
 
-            {authenticated && isBuyer && actualStatus === 'FUNDED' && isExpired && (
+            {authenticated && isBuyer && actualStatusUpper === 'FUNDED' && isExpired && (
               <p className="self-center text-sm text-white/60">This deal has expired. Seller can reclaim funds.</p>
             )}
           </div>
