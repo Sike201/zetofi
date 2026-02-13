@@ -7,6 +7,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { formatPubkey } from '@/lib/solana';
 
+const ZETO_MINT = 'HvZ32qK7ZT75nvcSkU2s6sgbXfWv2bRhXPWK9NXLpump';
+
+function formatZetoPrice(priceUsd) {
+  if (priceUsd == null || Number.isNaN(priceUsd)) return null;
+  const n = Number(priceUsd);
+  if (n < 0.0001) return n.toExponential(2);
+  if (n < 0.01) return n.toFixed(4);
+  if (n < 1) return n.toFixed(3);
+  return n.toFixed(2);
+}
+
 function NavLink({ href, children, active, mobile }) {
   return (
     <Link
@@ -37,11 +48,30 @@ export default function Header() {
   const connectedWallet = wallets.find(w => w.walletClientType !== 'privy') || wallets[0] || null;
   const walletAddress = connectedWallet?.address || user?.wallet?.address;
   const isSettle = pathname?.startsWith('/settle');
+  const isExplorer = pathname?.startsWith('/explorer');
   const isHistory = pathname?.startsWith('/history');
+  const [zetoPrice, setZetoPrice] = useState(null);
 
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchZetoPrice() {
+      try {
+        const res = await fetch(`/api/dexscreener/token/${ZETO_MINT}`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled && data?.priceUsd != null) setZetoPrice(data.priceUsd);
+      } catch {
+        /* ignore */
+      }
+    }
+    fetchZetoPrice();
+    const interval = setInterval(fetchZetoPrice, 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     if (ready) {
@@ -80,11 +110,14 @@ export default function Header() {
             />
           </Link>
           <nav className="hidden items-center gap-10 md:flex lg:gap-16">
-            <NavLink href="/" active={!isSettle && !isHistory}>
+            <NavLink href="/" active={!isSettle && !isExplorer && !isHistory}>
               Markets
             </NavLink>
             <NavLink href="/settle" active={!!isSettle}>
               Settle
+            </NavLink>
+            <NavLink href="/explorer" active={!!isExplorer}>
+              Explorer
             </NavLink>
             <NavLink href="/history" active={!!isHistory}>
               History
@@ -92,8 +125,13 @@ export default function Header() {
           </nav>
         </div>
 
-        {/* Desktop auth */}
+        {/* Desktop: ZETO price + auth */}
         <div className="hidden shrink-0 items-center gap-3 md:flex lg:gap-4">
+          {zetoPrice != null && (
+            <span className="text-xs text-white/50" title="ZETO price from DexScreener">
+              ${formatZetoPrice(zetoPrice)}
+            </span>
+          )}
           {ready && authenticated && walletAddress && (
             <span className="max-w-[140px] truncate text-sm font-mono text-white/70 lg:max-w-[180px]">
               {formatPubkey(walletAddress)}
@@ -148,11 +186,14 @@ export default function Header() {
             className="overflow-hidden border-t border-white/[0.06] md:hidden"
           >
             <nav className="bg-black px-4 py-3">
-              <NavLink href="/" active={!isSettle && !isHistory} mobile>
+              <NavLink href="/" active={!isSettle && !isExplorer && !isHistory} mobile>
                 Markets
               </NavLink>
               <NavLink href="/settle" active={!!isSettle} mobile>
                 Settle
+              </NavLink>
+              <NavLink href="/explorer" active={!!isExplorer} mobile>
+                Explorer
               </NavLink>
               <NavLink href="/history" active={!!isHistory} mobile>
                 History
